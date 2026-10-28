@@ -16,10 +16,15 @@ export interface KeystrokeRow {
   firstTry: boolean;
 }
 
+/**
+ * 'pair' = a "drill this" round from the slowest-pairs list; 'sprint' = the 60-second rank
+ * test; 'daily' = the daily challenge; 'falling' = the falling-words game.
+ */
+export type SessionMode = 'adaptive' | 'pair' | 'sprint' | 'daily' | 'falling';
+
 export interface SessionRow {
   id?: number;
-  /** 'pair' = a "drill this" round from the slowest-pairs list. */
-  mode: 'adaptive' | 'pair';
+  mode: SessionMode;
   stage: number;
   text: string;
   startedAt: number;
@@ -27,6 +32,8 @@ export interface SessionRow {
   netSpeed: number;
   accuracy: number;
   xp: number;
+  /** Correct keystrokes (rounds) or keystrokes in cleared words (falling words). Missing on early rows. */
+  correct?: number;
 }
 
 export interface KeyStatRow {
@@ -48,6 +55,19 @@ export interface SettingsRow {
   id: 'me';
   targetSpeed: number;
   accuracyFloor: number;
+  /** Practice minutes a day that count towards the streak. Missing on early rows. */
+  dailyGoalMinutes?: number;
+}
+
+export interface BadgeRow {
+  id: string;
+  earnedAt: number;
+}
+
+/** The daily challenge text, fixed the first time it's opened that day. */
+export interface DailyRow {
+  day: string;
+  text: string;
 }
 
 export class TrainerDB extends Dexie {
@@ -56,6 +76,8 @@ export class TrainerDB extends Dexie {
   keyStats!: EntityTable<KeyStatRow, 'unit'>;
   progress!: EntityTable<ProgressRow, 'id'>;
   settings!: EntityTable<SettingsRow, 'id'>;
+  badges!: EntityTable<BadgeRow, 'id'>;
+  daily!: EntityTable<DailyRow, 'day'>;
 
   constructor(name = 'korean-keyboard-trainer') {
     super(name);
@@ -65,6 +87,16 @@ export class TrainerDB extends Dexie {
       keyStats: 'unit',
       progress: 'id',
       settings: 'id',
+    });
+    // Phase 4: badges and the daily challenge text.
+    this.version(2).stores({
+      keystrokes: '++id, sessionId, time, expected',
+      sessions: '++id, startedAt, mode',
+      keyStats: 'unit',
+      progress: 'id',
+      settings: 'id',
+      badges: 'id',
+      daily: 'day',
     });
   }
 }

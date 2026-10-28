@@ -24,6 +24,8 @@ export interface GenerateOptions {
   /** A key-to-key transition to feature instead of a unit. */
   pair?: Pair;
   random?: () => number;
+  /** Minimum length in keystrokes; a normal round is ROUND_KEYSTROKES. */
+  keystrokes?: number;
 }
 
 export function hasPair(word: string, [from, to]: Pair): boolean {
@@ -32,13 +34,17 @@ export function hasPair(word: string, [from, to]: Pair): boolean {
 }
 
 /** A round of practice text using only unlocked units, leaning on the focus unit or pair. */
-export function generateText({ unlocked, focus, pair, random = Math.random }: GenerateOptions): string {
-  const allowed = new Set(unlocked);
+export function generateText({
+  unlocked,
+  focus,
+  pair,
+  random = Math.random,
+  keystrokes: length = ROUND_KEYSTROKES,
+}: GenerateOptions): string {
   const stage = currentStage(unlocked);
-  const fits = (text: string) => [...unitsOf(text)].every((u) => allowed.has(u));
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)];
 
-  const pool = WORDS.filter((w) => w.stage <= stage && fits(w.text)).map((w) => w.text);
+  const pool = practiceWords(unlocked);
   const make = madeUp(unlocked, stage >= 2, random);
 
   // What counts as "featuring" the target, and how to make up a word that does.
@@ -49,7 +55,7 @@ export function generateText({ unlocked, focus, pair, random = Math.random }: Ge
   const words: string[] = [];
   let keystrokes = 0;
   let featured = 0;
-  while (keystrokes < ROUND_KEYSTROKES) {
+  while (keystrokes < length) {
     // Deterministic share rather than a coin flip, so short rounds don't drift far from it.
     const wantFeature = features !== undefined && featured < FOCUS_SHARE * (words.length + 1);
     let word: string | undefined;
@@ -66,6 +72,25 @@ export function generateText({ unlocked, focus, pair, random = Math.random }: Ge
     keystrokes += toKeystrokes(word).length + 1;
   }
   return words.join(' ');
+}
+
+/** Real words that use only unlocked units and belong to the current stage or earlier. */
+export function practiceWords(unlocked: readonly string[]): string[] {
+  const allowed = new Set(unlocked);
+  const stage = currentStage(unlocked);
+  return WORDS.filter((w) => w.stage <= stage && [...unitsOf(w.text)].every((u) => allowed.has(u))).map((w) => w.text);
+}
+
+/** A repeatable pseudo-random source (mulberry32), so a seed always gives the same text. */
+export function seededRandom(seed: string): () => number {
+  let a = 2166136261;
+  for (let i = 0; i < seed.length; i++) a = Math.imul(a ^ seed.charCodeAt(i), 16777619);
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 /**

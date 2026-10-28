@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { unitLabel } from '../engine/curriculum';
 import { stats, type Round } from '../engine/round';
 import { fingerName, strokeForJamo } from '../hangul/layout';
+import { assembleTyped } from '../hangul/text';
+import type { Reward } from '../storage/progress';
+import { RewardPanel } from './RewardPanel';
 
 interface Props {
   round: Round;
@@ -9,11 +12,30 @@ interface Props {
   saving: boolean;
   /** A unit this round unlocked. */
   unlocked?: string;
+  reward?: Reward;
   onNext: () => void;
   onRetry: () => void;
+  title?: string;
+  nextLabel?: string;
+  retryLabel?: string;
+  /** Extra results for a mode, e.g. the sprint score or the daily comparison. */
+  extra?: ReactNode;
+  onBack?: () => void;
 }
 
-export function Summary({ round, saving, unlocked, onNext, onRetry }: Props) {
+export function Summary({
+  round,
+  saving,
+  unlocked,
+  reward,
+  onNext,
+  onRetry,
+  title = 'Round complete',
+  nextLabel = 'Next round',
+  retryLabel = 'Same text again',
+  extra,
+  onBack,
+}: Props) {
   const s = stats(round, round.finishedAt ?? 0);
 
   useEffect(() => {
@@ -27,7 +49,7 @@ export function Summary({ round, saving, unlocked, onNext, onRetry }: Props) {
 
   return (
     <div className="summary">
-      <h2>Round complete</h2>
+      <h2>{title}</h2>
       {unlocked && <p className="unlock" lang="ko">New: {describeUnlock(unlocked)}</p>}
       <div className="scores">
         <div>
@@ -41,10 +63,13 @@ export function Summary({ round, saving, unlocked, onNext, onRetry }: Props) {
         <div>
           <b>{s.seconds.toFixed(1)}s</b>
           <span>
-            {s.correct}/{s.total} keystrokes right
+            {s.correct}/{round.typed.length} keystrokes right
           </span>
         </div>
       </div>
+
+      {extra}
+      <RewardPanel reward={saving ? undefined : reward} />
 
       {s.missed.length > 0 ? (
         <p className="missed" lang="ko">
@@ -60,19 +85,25 @@ export function Summary({ round, saving, unlocked, onNext, onRetry }: Props) {
       )}
 
       <p lang="ko" className="typed-text">
-        {round.target}
+        {shownText(round)}
       </p>
 
       <div className="actions">
         <button className="primary" onClick={onNext} disabled={saving}>
-          {saving ? 'Saving…' : 'Next round'} <kbd>Enter</kbd>
+          {saving ? 'Saving…' : nextLabel} <kbd>Enter</kbd>
         </button>
         <button onClick={onRetry}>
-          Same text again <kbd>R</kbd>
+          {retryLabel} <kbd>R</kbd>
         </button>
+        {onBack && <button onClick={onBack}>Back to games</button>}
       </div>
     </div>
   );
+}
+
+/** The text practised: all of it, or only the part reached when a timed round ran out. */
+function shownText(round: Round): string {
+  return round.typed.length < round.expected.length ? assembleTyped(round.expected.slice(0, round.typed.length)) : round.target;
 }
 
 function describeUnlock(unit: string): string {

@@ -39,6 +39,11 @@ export function createRound(target: string): Round {
 
 export const isFinished = (r: Round): boolean => r.finishedAt !== null;
 
+/** Ends a round early, e.g. when a timed sprint runs out. No-op if it already ended. */
+export function endRound(r: Round, at: number): Round {
+  return r.finishedAt !== null ? r : { ...r, finishedAt: at };
+}
+
 /** The jamo the learner should press next, or undefined once the round is done. */
 export const nextExpected = (r: Round): string | undefined =>
   isFinished(r) ? undefined : r.expected[r.typed.length];

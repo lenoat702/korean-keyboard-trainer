@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { backspace, createRound, isFinished, nextExpected, press, stats, type Round } from '../engine/round';
+import { backspace, createRound, endRound, isFinished, nextExpected, press, stats, type Round } from '../engine/round';
 import { fingerForCode, thumbForSpace, type Thumb } from '../hands/geometry';
 import { skinAt } from '../hands/skin';
 import { fingerName, jamoForKey, strokeForJamo, type KeyStroke } from '../hangul/layout';
@@ -13,6 +13,8 @@ interface Props {
   unlocked: ReadonlySet<string>;
   focus?: string;
   onFinish: (round: Round) => void;
+  /** For timed rounds (the sprint): the round ends this long after the first key. */
+  timeLimitMs?: number;
 }
 
 const now = () => performance.timeOrigin + performance.now();
@@ -23,7 +25,10 @@ function lastLetterCode(r: Round): string | undefined {
   return undefined;
 }
 
-export function Practice({ text, unlocked, focus, onFinish }: Props) {
+/** Long texts (the sprint) show this many characters around where you are. */
+const WINDOW_CHARS = 72;
+
+export function Practice({ text, unlocked, focus, onFinish, timeLimitMs }: Props) {
   const [round, setRound] = useState(() => createRound(text));
   const [flash, setFlash] = useState<Flash | null>(null);
   const [focused, setFocused] = useState(true);
@@ -40,9 +45,16 @@ export function Practice({ text, unlocked, focus, onFinish }: Props) {
   // Tick the live speed readout while the round is running.
   useEffect(() => {
     if (round.startedAt === null || isFinished(round)) return;
-    const id = setInterval(() => setClock(now()), 250);
+    const id = setInterval(() => {
+      const t = now();
+      setClock(t);
+      // A timed round ends exactly at its limit, however late the tick lands.
+      if (timeLimitMs !== undefined && round.startedAt !== null && t - round.startedAt >= timeLimitMs) {
+        setRound((r) => endRound(r, r.startedAt! + timeLimitMs));
+      }
+    }, 100);
     return () => clearInterval(id);
-  }, [round.startedAt, round.finishedAt]);
+  }, [round.startedAt, round.finishedAt, timeLimitMs]);
 
   // Report the finished round exactly once, even if onFinish changes identity afterwards.
   const reported = useRef(false);
@@ -77,6 +89,9 @@ export function Practice({ text, unlocked, focus, onFinish }: Props) {
   const nextThumb = thumbForSpace(lastLetterCode(round));
   const nextFinger = stroke ? fingerForCode(stroke.key.code, nextThumb) : undefined;
   const live = stats(round, clock);
+  const [from, to] = visibleRange(text, ranges, round.typed.length);
+  const secondsLeft =
+    timeLimitMs === undefined ? undefined : Math.max(0, Math.ceil((timeLimitMs - live.seconds * 1000) / 1000));
   const lastWrong = round.typed.length > 0 && round.typed.at(-1) !== round.expected[round.typed.length - 1];
 
   return (
@@ -99,21 +114,27 @@ export function Practice({ text, unlocked, focus, onFinish }: Props) {
         <span>
           <b>{live.accuracy}</b>% accuracy
         </span>
-        <span>
-          <b>{Math.floor(live.seconds)}</b>s
-        </span>
+        {secondsLeft === undefined ? (
+          <span>
+            <b>{Math.floor(live.seconds)}</b>s
+          </span>
+        ) : (
+          <span className={secondsLeft <= 10 && round.startedAt !== null ? 'ending' : ''}>
+            <b>{secondsLeft}</b>s left{round.startedAt === null ? ' · starts on your first key' : ''}
+          </span>
+        )}
       </div>
 
       <p className="target" lang="ko">
-        {[...text].map((ch, i) => (
-          <span key={i} className={charState(round, ranges[i])}>
+        {[...text].slice(from, to).map((ch, k) => (
+          <span key={from + k} className={charState(round, ranges[from + k])}>
             {ch === ' ' ? ' ' : ch}
           </span>
         ))}
       </p>
 
       <p className={`input ${lastWrong ? 'wrong' : ''}`} lang="ko">
-        {assembleTyped(round.typed)}
+        {assembleTyped(round.typed.slice(ranges[from]?.[0] ?? 0))}
         <span className="caret" />
       </p>
 
@@ -146,6 +167,21 @@ export function Practice({ text, unlocked, focus, onFinish }: Props) {
       )}
     </div>
   );
+}
+
+/**
+ * Which characters to show: all of a normal round, or for long texts a window that starts a
+ * little before the current character, on a word boundary, so the line moves along with you.
+ */
+function visibleRange(text: string, ranges: Array<[number, number]>, typedCount: number): [number, number] {
+  const length = ranges.length;
+  if (length <= WINDOW_CHARS) return [0, length];
+  const current = Math.max(0, ranges.findIndex(([, end]) => typedCount < end));
+  const chars = [...text];
+  // Move the window on in steps of about half its width, so it doesn't shift every keystroke.
+  let from = Math.max(0, current - (current % (WINDOW_CHARS / 2)) - 8);
+  while (from > 0 && chars[from - 1] !== ' ') from--;
+  return [from, Math.min(length, from + WINDOW_CHARS)];
 }
 
 function charState(r: Round, [start, end]: [number, number]): string {

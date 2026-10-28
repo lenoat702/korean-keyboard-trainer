@@ -27,7 +27,10 @@ export interface DayPoint {
 }
 
 interface Acc {
+  /** All practice time, games included. */
   seconds: number;
+  /** Time in jamo-checked rounds, which weights the speed and accuracy means. */
+  scoredSec: number;
   speedSec: number;
   accSec: number;
   rounds: number;
@@ -37,20 +40,27 @@ interface Acc {
  * One point per calendar day for the `days` days ending today. Sessions from the 6 days
  * before the range should be included so the first points' 7-day averages are complete.
  */
-export function dailySeries(sessions: readonly SessionRow[], now: number, days: number): DayPoint[] {
+export function dailySeries(
+  sessions: readonly Pick<SessionRow, 'mode' | 'startedAt' | 'seconds' | 'netSpeed' | 'accuracy'>[],
+  now: number,
+  days: number,
+): DayPoint[] {
   const byDay = new Map<string, Acc>();
   for (const s of sessions) {
     const key = dayKey(s.startedAt);
-    const a = byDay.get(key) ?? { seconds: 0, speedSec: 0, accSec: 0, rounds: 0 };
+    const a = byDay.get(key) ?? { seconds: 0, scoredSec: 0, speedSec: 0, accSec: 0, rounds: 0 };
+    byDay.set(key, a);
     a.seconds += s.seconds;
+    a.rounds += 1;
+    // Falling words scores words, not jamo, so it counts as practice time but not towards the trends.
+    if (s.mode === 'falling') continue;
+    a.scoredSec += s.seconds;
     a.speedSec += s.netSpeed * s.seconds;
     a.accSec += s.accuracy * s.seconds;
-    a.rounds += 1;
-    byDay.set(key, a);
   }
 
   const mean = (a: Acc | undefined, field: 'speedSec' | 'accSec') =>
-    a && a.seconds > 0 ? Math.round((a[field] / a.seconds) * 10) / 10 : null;
+    a && a.scoredSec > 0 ? Math.round((a[field] / a.scoredSec) * 10) / 10 : null;
 
   const points: DayPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -58,11 +68,12 @@ export function dailySeries(sessions: readonly SessionRow[], now: number, days: 
     const day = dayKey(date);
     const today = byDay.get(day);
 
-    const week: Acc = { seconds: 0, speedSec: 0, accSec: 0, rounds: 0 };
+    const week: Acc = { seconds: 0, scoredSec: 0, speedSec: 0, accSec: 0, rounds: 0 };
     for (let j = 0; j < 7; j++) {
       const a = byDay.get(dayKey(startOfDay(date.getTime(), -j)));
       if (!a) continue;
       week.seconds += a.seconds;
+      week.scoredSec += a.scoredSec;
       week.speedSec += a.speedSec;
       week.accSec += a.accSec;
       week.rounds += a.rounds;

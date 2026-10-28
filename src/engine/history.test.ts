@@ -89,3 +89,25 @@ describe('slowestPairs', () => {
     expect(slowestPairs(rows, 1)).toEqual([]);
   });
 });
+
+describe('dailySeries with games', () => {
+  it('counts falling-words time but keeps it out of speed and accuracy', () => {
+    const now = new Date(2026, 9, 29, 12).getTime();
+    const at = new Date(2026, 9, 29, 9).getTime();
+    const [day] = dailySeries(
+      [
+        { mode: 'falling', startedAt: at, seconds: 120, netSpeed: 20, accuracy: 50 },
+        { mode: 'adaptive', startedAt: at + 1, seconds: 60, netSpeed: 100, accuracy: 96 },
+      ],
+      now,
+      1,
+    );
+    expect(day).toMatchObject({ minutes: 3, rounds: 2, speed: 100, accuracy: 96 });
+  });
+
+  it('shows a games-only day as practice time with no speed', () => {
+    const now = new Date(2026, 9, 29, 12).getTime();
+    const [day] = dailySeries([{ mode: 'falling', startedAt: now - 1000, seconds: 60, netSpeed: 20, accuracy: 50 }], now, 1);
+    expect(day).toMatchObject({ minutes: 1, speed: null });
+  });
+});

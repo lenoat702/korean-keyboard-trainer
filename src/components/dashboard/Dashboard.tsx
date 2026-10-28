@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Pair } from '../../engine/generator';
 import { dailySeries, slowestPairs, startOfDay, type DayPoint, type PairStat } from '../../engine/history';
 import type { TrainerDB } from '../../storage/db';
-import type { AppState } from '../../storage/progress';
+import type { AppState, Status } from '../../storage/progress';
 import { KeyHeatmap } from './KeyHeatmap';
 import { PracticeCalendar } from './PracticeCalendar';
+import { RewardsSection } from './RewardsSection';
 import { SlowPairs } from './SlowPairs';
 import { Legend, longDate, TrendChart, type Series } from './TrendChart';
 
@@ -14,7 +15,9 @@ type Range = (typeof RANGES)[number];
 interface Props {
   db: TrainerDB;
   state: AppState;
+  status: Status;
   onDrillPair: (pair: Pair) => void;
+  onGoalChange: (minutes: number) => void;
 }
 
 interface Data {
@@ -22,7 +25,7 @@ interface Data {
   pairs: PairStat[];
 }
 
-export function Dashboard({ db, state, onDrillPair }: Props) {
+export function Dashboard({ db, state, status, onDrillPair, onGoalChange }: Props) {
   const [range, setRange] = useState<Range>(30);
   const [data, setData] = useState<Data | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -74,6 +77,8 @@ export function Dashboard({ db, state, onDrillPair }: Props) {
 
   return (
     <div className={`dashboard ${data ? '' : 'loading'}`}>
+      <RewardsSection state={state} status={status} onGoalChange={onGoalChange} />
+
       <div className="filters" role="group" aria-label="Date range">
         {RANGES.map((r) => (
           <button key={r} className={r === range ? 'active' : ''} aria-pressed={r === range} onClick={() => setRange(r)}>

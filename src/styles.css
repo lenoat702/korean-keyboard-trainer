@@ -1310,3 +1310,384 @@ button:disabled {
 
 
 
+
+/* ── Phase 4: rank, rewards and games ───────────────────────────────────── */
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Rank, streak and XP under the title; opens Progress. */
+.status-line {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.status-line:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+button.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.quiet {
+  color: var(--quiet);
+  font-weight: 400;
+}
+
+/* What a round or game earned */
+
+.rewards {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.rewards.pending {
+  color: var(--quiet);
+}
+
+.rank-up {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--good-text);
+}
+
+.reward-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.xp {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.goal-bar {
+  display: block;
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.goal-bar.wide {
+  width: 100%;
+  margin: 6px 0;
+}
+
+.goal-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.streak {
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.hint-text {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.new-badges {
+  margin: 10px 0 0;
+}
+
+.chip.badge-chip {
+  background: var(--accent-soft);
+}
+
+.mode-note {
+  margin: 4px 0 0;
+  color: var(--quiet);
+}
+
+/* Games screen */
+
+.games {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.goal-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.goal-card > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.goal-card b {
+  font-size: 22px;
+}
+
+.game-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.game-card p {
+  margin: 0;
+}
+
+.game-card .game-best {
+  flex: 1;
+  margin: 8px 0 12px;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.game-card button {
+  align-self: flex-start;
+}
+
+.game-card.locked h3,
+.game-card.locked > p:first-of-type {
+  color: var(--quiet);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.live .ending b {
+  color: var(--bad);
+}
+
+/* Falling words */
+
+.fall-area {
+  position: relative;
+  height: 260px;
+  margin-top: 12px;
+  border: 1px dashed var(--line);
+  border-bottom: 3px solid var(--line);
+  border-radius: 10px 10px 4px 4px;
+  overflow: hidden;
+  font-family: var(--hangul);
+  font-size: 24px;
+}
+
+.drop {
+  position: absolute;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  white-space: nowrap;
+  line-height: 1.6em;
+}
+
+.drop.match {
+  color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.drop.danger {
+  color: var(--bad);
+}
+
+.drop.pop {
+  color: var(--ok);
+  animation: pop 0.45s ease-out forwards;
+}
+
+@keyframes pop {
+  to {
+    opacity: 0;
+    transform: translateY(-16px) scale(1.15);
+  }
+}
+
+.fall-ready {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  color: var(--quiet);
+}
+
+.fall-input {
+  min-height: 48px;
+}
+
+.fall-input.shake {
+  animation: shake 0.25s;
+}
+
+@keyframes shake {
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.hearts {
+  color: var(--bad);
+  letter-spacing: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop.pop,
+  .fall-input.shake {
+    animation: none;
+  }
+}
+
+/* Rank and rewards on Progress */
+
+.rank-ladder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.rank-ladder li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 72px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--quiet);
+}
+
+.rank-ladder li b {
+  font-size: 16px;
+}
+
+.rank-ladder li span {
+  font-size: 11px;
+}
+
+.rank-ladder li.passed {
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.rank-ladder li.current {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.next-rank p {
+  margin: 0 0 4px;
+}
+
+.next-rank ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.next-rank li {
+  padding: 2px 0;
+}
+
+.next-rank li.done {
+  color: var(--good-text);
+}
+
+.reward-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  margin: 14px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.reward-stats select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 6px;
+}
+
+.rewards-section h4 {
+  margin: 0 0 8px;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.badge-grid li {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--quiet);
+  font-size: 13px;
+}
+
+.badge-grid li b {
+  font-size: 14px;
+}
+
+.badge-grid li.earned {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}

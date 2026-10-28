@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toKeystrokes, unitsOf } from '../hangul/text';
 import { STARTING_UNITS, UNLOCK_ORDER } from './curriculum';
-import { generateText, hasPair } from './generator';
+import { generateText, hasPair, practiceWords, seededRandom } from './generator';
 
 // Small deterministic PRNG so failures are reproducible.
 function seeded(seed: number) {
@@ -49,5 +49,27 @@ describe('generateText', () => {
   it('never repeats a word back to back', () => {
     const words = generateText({ unlocked: STARTING_UNITS, focus: 'ㄹ', random: seeded(7) }).split(' ');
     words.slice(1).forEach((w, i) => expect(w).not.toBe(words[i]));
+  });
+});
+
+describe('seeded and long text', () => {
+  const unlocked = UNLOCK_ORDER.slice(0, 20);
+
+  it('gives the same text for the same seed', () => {
+    const a = generateText({ unlocked, random: seededRandom('2026-10-29') });
+    const b = generateText({ unlocked, random: seededRandom('2026-10-29') });
+    const c = generateText({ unlocked, random: seededRandom('2026-10-30') });
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+  });
+
+  it('makes text at least as long as asked', () => {
+    expect(toKeystrokes(generateText({ unlocked, keystrokes: 800 })).length).toBeGreaterThanOrEqual(790);
+  });
+
+  it('lists only real words that fit the unlocked keys', () => {
+    const words = practiceWords(UNLOCK_ORDER.slice(0, 5));
+    expect(words.length).toBeGreaterThan(0);
+    for (const w of words) for (const u of unitsOf(w)) expect(UNLOCK_ORDER.slice(0, 5)).toContain(u);
   });
 });
