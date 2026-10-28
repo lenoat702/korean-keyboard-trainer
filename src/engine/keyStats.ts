@@ -64,21 +64,27 @@ export interface UnitSummary {
   accuracy: number;
   samples: number;
   ready: boolean;
+  /** Ready on placement-test credit alone: it has fewer than MIN_SAMPLES presses so far. */
+  placed: boolean;
   /** 0–5 */
   stars: number;
 }
 
-export function summarize(stat: UnitStat | undefined, t: Targets): UnitSummary {
+/**
+ * A unit against the targets. `placed` is credit from the placement test: the unit counts as
+ * ready until it has enough presses to be measured, and from then on its own numbers decide.
+ */
+export function summarize(stat: UnitStat | undefined, t: Targets, placed = false): UnitSummary {
   const samples = stat?.results.length ?? 0;
-  if (!stat || samples === 0) return { speed: 0, accuracy: 0, samples: 0, ready: false, stars: 0 };
+  if (!stat || samples === 0) return { speed: 0, accuracy: 0, samples: 0, ready: placed, placed, stars: 0 };
 
   const meanMs = stat.times.length ? stat.times.reduce((a, b) => a + b, 0) / stat.times.length : Infinity;
   const speed = Math.round(60000 / meanMs);
   const accuracy = (100 * stat.results.filter(Boolean).length) / samples;
   const enough = samples >= MIN_SAMPLES;
-  const ready = enough && speed >= t.targetSpeed && accuracy >= t.accuracyFloor;
+  const ready = enough ? speed >= t.targetSpeed && accuracy >= t.accuracyFloor : placed;
 
-  return { speed, accuracy, samples, ready, stars: enough ? starsFor(speed / t.targetSpeed, accuracy >= t.accuracyFloor) : 0 };
+  return { speed, accuracy, samples, ready, placed: placed && !enough, stars: enough ? starsFor(speed / t.targetSpeed, accuracy >= t.accuracyFloor) : 0 };
 }
 
 // 3 stars = at target; more for going well past it. Below the accuracy floor caps at 2.
@@ -87,25 +93,40 @@ function starsFor(ratio: number, accurate: boolean): number {
   return accurate ? stars : Math.min(stars, 2);
 }
 
+/** Whether a unit is at the targets, or still on placement credit. `placed` lists the credited units. */
+export function isReady(unit: string, stats: StatMap, t: Targets, placed: readonly string[] = []): boolean {
+  return summarize(stats.get(unit), t, placed.includes(unit)).ready;
+}
+
 /** The next unit to unlock, if every unlocked unit has reached the targets. */
-export function unitToUnlock(unlocked: readonly string[], stats: StatMap, t: Targets): string | undefined {
+export function unitToUnlock(
+  unlocked: readonly string[],
+  stats: StatMap,
+  t: Targets,
+  placed: readonly string[] = [],
+): string | undefined {
   const next = nextLocked(unlocked);
   if (next === undefined) return undefined;
-  return unlocked.every((u) => summarize(stats.get(u), t).ready) ? next : undefined;
+  return unlocked.every((u) => isReady(u, stats, t, placed)) ? next : undefined;
 }
 
 /**
  * The unit drills should lean on: the newest one until it's ready, otherwise the
  * unit furthest from the targets. Undefined only when everything is ready.
  */
-export function focusUnit(unlocked: readonly string[], stats: StatMap, t: Targets): string | undefined {
+export function focusUnit(
+  unlocked: readonly string[],
+  stats: StatMap,
+  t: Targets,
+  placed: readonly string[] = [],
+): string | undefined {
   const newest = unlocked.at(-1);
-  if (newest !== undefined && !summarize(stats.get(newest), t).ready) return newest;
+  if (newest !== undefined && !isReady(newest, stats, t, placed)) return newest;
 
   let worst: string | undefined;
   let worstScore = Infinity;
   for (const u of unlocked) {
-    const s = summarize(stats.get(u), t);
+    const s = summarize(stats.get(u), t, placed.includes(u));
     if (s.ready) continue;
     // Too few samples ranks below any measured unit (score < 0), fewest first, so neglected units get practice.
     const score =

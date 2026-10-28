@@ -5,7 +5,8 @@ import { STARTING_UNITS, UNLOCK_ORDER } from '../engine/curriculum';
 import { createRound, press, type Round } from '../engine/round';
 import { toKeystrokes } from '../hangul/text';
 import { TrainerDB } from './db';
-import { addOwnText, dailyText, loadOwnTexts, loadState, saveGame, saveRound, setOwnTextPart } from './progress';
+import { placementText, unitsThrough } from '../engine/placement';
+import { addOwnText, dailyText, loadOwnTexts, loadState, saveGame, savePlacement, saveRound, setOwnTextPart, status } from './progress';
 
 let n = 0;
 const dbs: TrainerDB[] = [];
@@ -150,5 +151,54 @@ describe('rewards storage', () => {
     expect((await addOwnText(db, 'only English here')).saved).toBeUndefined();
     expect(await db.texts.count()).toBe(0);
   });
-});
 
+  describe('placement test', () => {
+    it('unlocks the passed stages with credit, and keeps every stage typed as a round', async () => {
+      const db = open(freshName());
+      const state = await loadState(db);
+      // Stages 1 and 2 typed fast, stage 3 too slow to pass.
+      const rounds = [typed(placementText(1), 300), typed(placementText(2), 300, 2_000_000), typed(placementText(3), 900, 3_000_000)];
+      const { state: next, reward } = await savePlacement(db, state, rounds, 2);
+
+      expect(next.progress.unlocked).toEqual([...unitsThrough(2), 'ㄱ']);
+      expect(next.progress.placed).toEqual(unitsThrough(2));
+      expect(next.progress.stage).toBe(3);
+      expect(status(next).stagesPassed).toBe(2);
+      expect(reward?.mode).toBe('placement');
+
+      // Stage 3's presses count too, now that its first key is unlocked.
+      expect(next.stats.get('ㄱ')?.results.length ?? 0).toBeGreaterThan(0);
+      const sessions = await db.sessions.toArray();
+      expect(sessions.map((s) => [s.mode, s.stage])).toEqual([
+        ['placement', 1],
+        ['placement', 2],
+        ['placement', 3],
+      ]);
+      expect(await db.keystrokes.count()).toBe(rounds.reduce((n, r) => n + r.log.length, 0));
+
+      const reloaded = await loadState(db);
+      expect(reloaded.progress).toEqual(next.progress);
+    });
+
+    it('changes nothing but the record when no stage passed', async () => {
+      const db = open(freshName());
+      const state = await loadState(db);
+      const { state: next } = await savePlacement(db, state, [typed(placementText(1), 900)], 0);
+      expect(next.progress.unlocked).toEqual(STARTING_UNITS);
+      expect(next.progress.placed).toEqual([]);
+      expect(await db.sessions.count()).toBe(1);
+    });
+
+    it('lets normal unlocking carry on from the placement', async () => {
+      const db = open(freshName());
+      let state = (await savePlacement(db, await loadState(db), [typed(placementText(1), 300)], 1)).state;
+      expect(state.progress.unlocked).toEqual([...unitsThrough(1), 'ㅎ']);
+      // Only ㅎ needs to reach the target; the placed home-row keys are on credit.
+      let unlocked: string | undefined;
+      for (let i = 0; i < 10 && !unlocked; i++) {
+        ({ state, unlocked } = await saveRound(db, state, typed('하나 하하 한 하마 할 함 하리 아하 할머니 허', 200, (i + 5) * 100_000)));
+      }
+      expect(unlocked).toBe('ㅗ');
+    });
+  });
+});

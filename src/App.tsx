@@ -5,6 +5,7 @@ import { FreeType } from './components/FreeType';
 import { bestOnDay, Games, type GameKind } from './components/Games';
 import { KeyProgress } from './components/KeyProgress';
 import { OwnTexts } from './components/OwnTexts';
+import { Placement } from './components/Placement';
 import { Practice } from './components/Practice';
 import { SettingsMenu } from './components/SettingsMenu';
 import { Summary } from './components/Summary';
@@ -22,6 +23,7 @@ import {
   removeOwnText,
   saveDailyGoal,
   saveGame,
+  savePlacement,
   saveRound,
   setOwnTextPart,
   status as statusOf,
@@ -45,7 +47,7 @@ interface Drill {
 function nextDrill(state: AppState, pair?: Pair): Drill {
   const { unlocked } = state.progress;
   if (pair) return { text: generateText({ unlocked, pair }), pair };
-  const focus = focusUnit(unlocked, state.stats, state.settings);
+  const focus = focusUnit(unlocked, state.stats, state.settings, state.progress.placed);
   return { text: generateText({ unlocked, focus, freeText: inFreeText(statusOf(state)) }), focus };
 }
 
@@ -100,6 +102,9 @@ export function App() {
   // Free-type text lives here so it survives switching screens.
   const [freeTyped, setFreeTyped] = useState<string[]>([]);
   const [ownTexts, setOwnTexts] = useState<OwnText[]>([]);
+  // The placement test is offered until your first round; `placing` while it runs.
+  const [placing, setPlacing] = useState(false);
+  const [offerDeclined, setOfferDeclined] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([loadState(db), loadOwnTexts(db)])
@@ -109,6 +114,7 @@ export function App() {
         setDrill(nextDrill(s));
         setResult(null);
         setPlay(null);
+        setPlacing(false);
         setRoundId((n) => n + 1);
       })
       .catch((e: unknown) => setError(`Couldn't open saved progress: ${String(e)}`));
@@ -198,6 +204,22 @@ export function App() {
       .then(() => setOwnTexts((list) => list.filter((t) => t.id !== id)))
       .catch((e: unknown) => setError(`Couldn't remove that text: ${String(e)}`));
   }, []);
+
+  const onPlacementSave = useCallback(
+    async (rounds: Round[], passed: number) => {
+      if (!state) return undefined;
+      const { state: next } = await savePlacement(db, state, rounds, passed);
+      setState(next);
+      const grew = next.progress.unlocked.length > state.progress.unlocked.length;
+      return grew ? next.progress.unlocked.at(-1) : undefined;
+    },
+    [state],
+  );
+  const onPlacementDone = useCallback(() => {
+    setPlacing(false);
+    setOfferDeclined(true);
+    if (state) startDrill(nextDrill(state));
+  }, [state, startDrill]);
 
   const startGame = useCallback(
     async (kind: GameKind, text?: string) => {
@@ -340,8 +362,29 @@ export function App() {
         />
       ) : view === 'games' ? (
         renderGame()
+      ) : placing ? (
+        <Placement targets={state.settings} onSave={onPlacementSave} onDone={onPlacementDone} />
       ) : (
         <>
+          {state.sessions.length === 0 && !offerDeclined && !result && (
+            <section className="placement-offer">
+              <div>
+                <h2>Already type some Korean?</h2>
+                <p className="quiet">
+                  Take the two-minute placement test to skip the stages you can already pass, or just start typing
+                  below from the home row.
+                </p>
+              </div>
+              <div className="placement-offer-actions">
+                <button className="primary" onClick={() => setPlacing(true)}>
+                  Take the placement test
+                </button>
+                <button className="link" onClick={() => setOfferDeclined(true)}>
+                  No thanks
+                </button>
+              </div>
+            </section>
+          )}
           {drill.pair && !result && (
             <p className="drill-banner" lang="ko">
               Drilling a slow pair: {drill.pair[0]} → {drill.pair[1]}

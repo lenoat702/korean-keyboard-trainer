@@ -106,7 +106,8 @@ function shownText(round: Round): string {
   return round.typed.length < round.expected.length ? assembleTyped(round.expected.slice(0, round.typed.length)) : round.target;
 }
 
-function describeUnlock(unit: string): string {
+/** A newly unlocked unit and how to type it, e.g. "ㄱ unlocked: R, left index". */
+export function describeUnlock(unit: string): string {
   const stroke = strokeForJamo(unit);
   if (!stroke) return `${unitLabel(unit)} unlocked`;
   const keys = stroke.shift ? `Shift + ${stroke.key.latin}` : stroke.key.latin;

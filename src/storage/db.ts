@@ -19,9 +19,9 @@ export interface KeystrokeRow {
 /**
  * 'pair' = a "drill this" round from the slowest-pairs list; 'sprint' = the 60-second rank
  * test; 'daily' = the daily challenge; 'falling' = the falling-words game; 'own' = a part of
- * a text you pasted in.
+ * a text you pasted in; 'placement' = one stage of the placement test.
  */
-export type SessionMode = 'adaptive' | 'pair' | 'sprint' | 'daily' | 'falling' | 'own';
+export type SessionMode = 'adaptive' | 'pair' | 'sprint' | 'daily' | 'falling' | 'own' | 'placement';
 
 export interface SessionRow {
   id?: number;
@@ -50,6 +50,8 @@ export interface ProgressRow {
   /** Units in the order they unlocked. */
   unlocked: string[];
   stage: number;
+  /** Units the placement test credited as ready until they're measured. Missing before it's taken. */
+  placed?: string[];
 }
 
 export interface SettingsRow {

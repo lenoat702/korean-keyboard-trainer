@@ -6,6 +6,7 @@ import { recordRound, summarize, unitToUnlock, type UnitStat } from '../engine/k
 import { rankIndex, stagesPassed, type RankInput } from '../engine/rank';
 import { stats as roundStats, type Round } from '../engine/round';
 import { cleanText, splitParts, type Cleaned } from '../engine/ownText';
+import { placementUnlock } from '../engine/placement';
 import { DEFAULT_GOAL_MINUTES, streakInfo, type StreakInfo } from '../engine/streak';
 import { fallingXp, xpFor } from '../engine/xp';
 import type { OwnTextRow, ProgressRow, SessionMode, SessionRow, SettingsRow, TrainerDB } from './db';
@@ -56,6 +57,7 @@ export function rankInput(state: AppState): RankInput {
     stats: state.stats,
     targets: state.settings,
     sprints: state.sessions.filter((s) => s.mode === 'sprint'),
+    placed: state.progress.placed,
   };
 }
 
@@ -71,7 +73,7 @@ export function status(state: AppState, now = Date.now()): Status {
     rank: rankIndex(rankInput(state)),
     streak: streakInfo(state.sessions, state.settings.dailyGoalMinutes, now),
     xpTotal: state.sessions.reduce((sum, s) => sum + s.xp, 0),
-    stagesPassed: stagesPassed(state.progress.unlocked, state.stats, state.settings),
+    stagesPassed: stagesPassed(state.progress.unlocked, state.stats, state.settings, state.progress.placed),
   };
 }
 
@@ -109,19 +111,82 @@ export async function saveRound(
   round: Round,
   mode: Exclude<SessionMode, 'falling'> = 'adaptive',
 ): Promise<SaveResult> {
-  if (round.startedAt === null || round.finishedAt === null) throw new Error('Round not finished');
-  const s = roundStats(round, round.finishedAt);
-
+  const session = sessionFor(round, mode, state.progress.stage);
   const changed = recordRound(state.stats, round, state.progress.unlocked);
   const stats = new Map(state.stats);
   for (const c of changed) stats.set(c.unit, c);
 
-  const newUnit = unitToUnlock(state.progress.unlocked, stats, state.settings);
-  const unlocked = newUnit ? [...state.progress.unlocked, newUnit] : state.progress.unlocked;
-  const progress: ProgressRow = { id: 'me', unlocked, stage: currentStage(unlocked) };
-  const session: SessionRow = {
+  const { unlocked: have, placed } = state.progress;
+  const newUnit = unitToUnlock(have, stats, state.settings, placed);
+  const unlocked = newUnit ? [...have, newUnit] : have;
+  const progress: ProgressRow = { ...state.progress, unlocked, stage: currentStage(unlocked) };
+
+  let id = 0;
+  await db.transaction('rw', [db.sessions, db.keystrokes, db.keyStats, db.progress, db.settings], async () => {
+    [id] = await addRounds(db, [[session, round]]);
+    await db.keyStats.bulkPut(changed.map((c) => ({ ...c, stars: summarize(c, state.settings).stars })));
+    await db.progress.put(progress);
+    // Save settings too, so first-launch defaults become explicit once you've practised.
+    await db.settings.put(state.settings);
+  });
+
+  const after: AppState = { ...state, stats, progress, sessions: [...state.sessions, summaryOf(session, id)] };
+  const { state: withBadges, reward } = await settleRewards(db, state, after);
+  return { state: withBadges, unlocked: newUnit, reward };
+}
+
+/**
+ * Stores the placement test, given one round per stage from stage 1 (the last may be unfinished,
+ * if you stopped). Each stage typed is a round like any other, and the keys of the
+ * `passed` stages unlock with placement credit. Rounds are measured against the new keys, so
+ * the test's presses count for every key it used. No reward if nothing was typed.
+ */
+export async function savePlacement(
+  db: TrainerDB,
+  state: AppState,
+  rounds: readonly Round[],
+  passed: number,
+): Promise<{ state: AppState; reward?: Reward }> {
+  const { unlocked, placed } = placementUnlock(passed, state.progress.unlocked);
+  const progress: ProgressRow = {
+    ...state.progress,
+    unlocked,
+    stage: currentStage(unlocked),
+    placed: [...new Set([...(state.progress.placed ?? []), ...placed])],
+  };
+
+  const typed = rounds.flatMap((r, i) => (r.startedAt !== null && r.finishedAt !== null ? [{ round: r, stage: i + 1 }] : []));
+  const stats = new Map(state.stats);
+  for (const { round } of typed) for (const c of recordRound(stats, round, unlocked)) stats.set(c.unit, c);
+  const changed = [...stats.values()].filter((c) => c !== state.stats.get(c.unit));
+  // Each session is filed under the stage it tested.
+  const sessions = typed.map(({ round, stage }) => [sessionFor(round, 'placement', stage), round] as const);
+
+  let ids: number[] = [];
+  await db.transaction('rw', [db.sessions, db.keystrokes, db.keyStats, db.progress, db.settings], async () => {
+    ids = await addRounds(db, sessions);
+    await db.keyStats.bulkPut(changed.map((c) => ({ ...c, stars: summarize(c, state.settings).stars })));
+    await db.progress.put(progress);
+    await db.settings.put(state.settings);
+  });
+
+  const after: AppState = {
+    ...state,
+    stats,
+    progress,
+    sessions: [...state.sessions, ...sessions.map(([s], i) => summaryOf(s, ids[i]))],
+  };
+  if (sessions.length === 0) return { state: after };
+  return settleRewards(db, state, after);
+}
+
+/** The session row for a finished round. */
+function sessionFor(round: Round, mode: Exclude<SessionMode, 'falling'>, stage: number): SessionRow {
+  if (round.startedAt === null || round.finishedAt === null) throw new Error('Round not finished');
+  const s = roundStats(round, round.finishedAt);
+  return {
     mode,
-    stage: state.progress.stage,
+    stage,
     text: round.target,
     startedAt: round.startedAt,
     seconds: s.seconds,
@@ -130,10 +195,14 @@ export async function saveRound(
     xp: xpFor(s.correct, s.accuracy),
     correct: s.correct,
   };
+}
 
-  let id = 0;
-  await db.transaction('rw', [db.sessions, db.keystrokes, db.keyStats, db.progress, db.settings], async () => {
-    id = (await db.sessions.add(session)) as number;
+/** Adds sessions with their raw keystrokes; call inside a transaction. Returns the new session ids. */
+async function addRounds(db: TrainerDB, rounds: ReadonlyArray<readonly [SessionRow, Round]>): Promise<number[]> {
+  const ids: number[] = [];
+  for (const [session, round] of rounds) {
+    const id = (await db.sessions.add(session)) as number;
+    ids.push(id);
     await db.keystrokes.bulkAdd(
       round.log.map((p) => ({
         sessionId: id,
@@ -147,16 +216,13 @@ export async function saveRound(
         firstTry: p.firstTry,
       })),
     );
-    await db.keyStats.bulkPut(changed.map((c) => ({ ...c, stars: summarize(c, state.settings).stars })));
-    await db.progress.put(progress);
-    // Save settings too, so first-launch defaults become explicit once you've practised.
-    await db.settings.put(state.settings);
-  });
+  }
+  return ids;
+}
 
+function summaryOf(session: SessionRow, id: number): SessionSummary {
   const { text: _text, ...summary } = session;
-  const after: AppState = { ...state, stats, progress, sessions: [...state.sessions, { ...summary, id }] };
-  const { state: withBadges, reward } = await settleRewards(db, state, after);
-  return { state: withBadges, unlocked: newUnit, reward };
+  return { ...summary, id };
 }
 
 export interface GameResult {
@@ -174,8 +240,7 @@ export interface GameResult {
 export async function saveGame(db: TrainerDB, state: AppState, game: GameResult): Promise<SaveResult> {
   const session: SessionRow = { ...game, stage: state.progress.stage, xp: fallingXp(game.correct) };
   const id = (await db.sessions.add(session)) as number;
-  const { text: _text, ...summary } = session;
-  const after: AppState = { ...state, sessions: [...state.sessions, { ...summary, id }] };
+  const after: AppState = { ...state, sessions: [...state.sessions, summaryOf(session, id)] };
   return settleRewards(db, state, after);
 }
 

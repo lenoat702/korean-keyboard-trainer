@@ -1,6 +1,6 @@
 import { ALL_JAMO } from '../hangul/layout';
 import { STAGES } from './curriculum';
-import { summarize, type StatMap, type Targets } from './keyStats';
+import { isReady, type StatMap, type Targets } from './keyStats';
 
 // Rank comes only from measured skill: passed stages, then the sprint (rank test).
 
@@ -40,6 +40,8 @@ export interface RankInput {
   stats: StatMap;
   targets: Targets;
   sprints: readonly SprintResult[];
+  /** Units credited by the placement test. */
+  placed?: readonly string[];
 }
 
 /**
@@ -47,7 +49,12 @@ export interface RankInput {
  * unlock rule only allows that when every unit so far is at target); the last keyed stage,
  * once all its units are at target. Free text, with no keys of its own, is never "passed".
  */
-export function stagesPassed(unlocked: readonly string[], stats: StatMap, targets: Targets): number {
+export function stagesPassed(
+  unlocked: readonly string[],
+  stats: StatMap,
+  targets: Targets,
+  placed: readonly string[] = [],
+): number {
   const have = new Set(unlocked);
   let passed = 0;
   for (const [i, stage] of STAGES.entries()) {
@@ -55,7 +62,7 @@ export function stagesPassed(unlocked: readonly string[], stats: StatMap, target
     const next = STAGES[i + 1];
     const done = next?.units.length
       ? have.has(next.units[0])
-      : stage.units.every((u) => have.has(u) && summarize(stats.get(u), targets).ready);
+      : stage.units.every((u) => have.has(u) && isReady(u, stats, targets, placed));
     if (!done) break;
     passed = stage.id;
   }
@@ -93,7 +100,7 @@ function meets(rank: Rank, input: RankInput, passed: number): boolean {
 
 /** Index into RANKS of the rank held, or -1 before the first. Ranks are earned in order. */
 export function rankIndex(input: RankInput): number {
-  const passed = stagesPassed(input.unlocked, input.stats, input.targets);
+  const passed = stagesPassed(input.unlocked, input.stats, input.targets, input.placed);
   let i = -1;
   while (i + 1 < RANKS.length && meets(RANKS[i + 1], input, passed)) i++;
   return i;
@@ -109,7 +116,7 @@ export interface Requirement {
 /** What the given rank asks for, and how far along each part is. */
 export function requirements(rank: Rank, input: RankInput): Requirement[] {
   if (rank.stage !== undefined) {
-    const passed = stagesPassed(input.unlocked, input.stats, input.targets);
+    const passed = stagesPassed(input.unlocked, input.stats, input.targets, input.placed);
     return [{ label: `Pass stage ${rank.stage}`, done: passed >= rank.stage, status: `${passed} of ${rank.stage} stages passed` }];
   }
   const unlockedCount = ALL_JAMO.filter((j) => input.unlocked.includes(j)).length;
