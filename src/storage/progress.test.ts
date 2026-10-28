@@ -5,7 +5,7 @@ import { STARTING_UNITS, UNLOCK_ORDER } from '../engine/curriculum';
 import { createRound, press, type Round } from '../engine/round';
 import { toKeystrokes } from '../hangul/text';
 import { TrainerDB } from './db';
-import { dailyText, loadState, saveGame, saveRound } from './progress';
+import { addOwnText, dailyText, loadOwnTexts, loadState, saveGame, saveRound, setOwnTextPart } from './progress';
 
 let n = 0;
 const dbs: TrainerDB[] = [];
@@ -130,4 +130,25 @@ describe('rewards storage', () => {
     expect(state.settings).toMatchObject({ targetSpeed: 120, dailyGoalMinutes: 10 });
     expect(state.badges.size).toBe(0);
   });
+
+  it('saves a pasted text cleaned, and keeps your place through its parts', async () => {
+    const db = open(freshName());
+    const sentence = '저는 매일 아침 일찍 일어나서 공원에서 천천히 걸어요.';
+    const { saved, removed } = await addOwnText(db, `Hello! ${Array(8).fill(sentence).join(' ')}`);
+    expect(removed).toBe(6);
+    expect(saved!.parts.length).toBeGreaterThan(1);
+
+    const second = await setOwnTextPart(db, saved!, 1);
+    expect((await loadOwnTexts(db))[0].part).toBe(1);
+    // Past the last part, it starts again from the top.
+    const wrapped = await setOwnTextPart(db, second, saved!.parts.length);
+    expect(wrapped.part).toBe(0);
+  });
+
+  it("doesn't save a paste with nothing to type", async () => {
+    const db = open(freshName());
+    expect((await addOwnText(db, 'only English here')).saved).toBeUndefined();
+    expect(await db.texts.count()).toBe(0);
+  });
 });
+

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { unitLabel } from '../../engine/curriculum';
+import { UNLOCK_ORDER, unitLabel } from '../../engine/curriculum';
 import { MIN_SAMPLES, summarize } from '../../engine/keyStats';
-import { COMPOUND, DOUBLE_FINAL } from '../../hangul/text';
-import { HAND_SPLIT, ROWS, type KeyDef } from '../../hangul/layout';
+import { ALL_JAMO, HAND_SPLIT, ROWS, type KeyDef } from '../../hangul/layout';
 import type { AppState } from '../../storage/progress';
 
 const OFFSETS = [0, 0.3, 0.8];
@@ -40,7 +39,8 @@ export function KeyHeatmap({ state }: { state: AppState }) {
   };
 
   const activeDef = ROWS.flat().find((d) => d.code === active);
-  const patterns = [COMPOUND, DOUBLE_FINAL].map(info);
+  // Everything that isn't a jamo key: patterns, word gaps, punctuation and numbers.
+  const patterns = UNLOCK_ORDER.filter((u) => !ALL_JAMO.includes(u)).map(info);
 
   return (
     <section className="dash-card">

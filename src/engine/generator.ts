@@ -1,7 +1,8 @@
 import { combineCharacter } from 'es-hangul';
-import { toKeystrokes, unitsOf } from '../hangul/text';
+import { toKeystrokes, unitsOf, WORD_GAP } from '../hangul/text';
 import { currentStage } from './curriculum';
-import { WORDS } from './words';
+import { PASSAGES } from './passages';
+import { COMMON_WORDS, WORDS } from './words';
 
 /** Share of words that should contain the focus, when enough such words exist. */
 const FOCUS_SHARE = 0.6;
@@ -26,6 +27,8 @@ export interface GenerateOptions {
   random?: () => number;
   /** Minimum length in keystrokes; a normal round is ROUND_KEYSTROKES. */
   keystrokes?: number;
+  /** Free text reached (stage 10): proverbs and paragraphs join the sentences. */
+  freeText?: boolean;
 }
 
 export function hasPair(word: string, [from, to]: Pair): boolean {
@@ -33,22 +36,38 @@ export function hasPair(word: string, [from, to]: Pair): boolean {
   return ks.some((k, i) => k === from && ks[i + 1] === to);
 }
 
-/** A round of practice text using only unlocked units, leaning on the focus unit or pair. */
+/**
+ * A round of practice text using only unlocked units, leaning on the focus unit or pair.
+ * Words until stage 9, then whole sentences; a pair drill always uses words.
+ */
 export function generateText({
   unlocked,
   focus,
   pair,
   random = Math.random,
   keystrokes: length = ROUND_KEYSTROKES,
+  freeText = false,
 }: GenerateOptions): string {
   const stage = currentStage(unlocked);
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)];
+
+  if (!pair) {
+    const passages = practicePassages(unlocked, freeText);
+    if (passages.length > 0) return passageText(passages, focus, random, length);
+  }
 
   const pool = practiceWords(unlocked);
   const make = madeUp(unlocked, stage >= 2, random);
 
   // What counts as "featuring" the target, and how to make up a word that does.
-  const features = pair ? (w: string) => hasPair(w, pair) : focus ? (w: string) => unitsOf(w).has(focus) : undefined;
+  // Word gaps live between words, so their drills lean on the everyday words instead.
+  const features = pair
+    ? (w: string) => hasPair(w, pair)
+    : focus === WORD_GAP
+      ? (w: string) => COMMON_WORDS.has(w)
+      : focus
+        ? (w: string) => unitsOf(w).has(focus)
+        : undefined;
   const madeUpFeature = pair ? () => make.withPair(pair) : focus?.length === 1 ? () => make.withUnit(focus) : undefined;
   const featurePool = features ? pool.filter(features) : [];
 
@@ -79,6 +98,32 @@ export function practiceWords(unlocked: readonly string[]): string[] {
   const allowed = new Set(unlocked);
   const stage = currentStage(unlocked);
   return WORDS.filter((w) => w.stage <= stage && [...unitsOf(w.text)].every((u) => allowed.has(u))).map((w) => w.text);
+}
+
+/** Sentences, plus proverbs and paragraphs in free text, that need nothing still locked. */
+export function practicePassages(unlocked: readonly string[], freeText = false): string[] {
+  const allowed = new Set(unlocked);
+  return PASSAGES.filter((p) => (p.stage === 9 || freeText) && [...unitsOf(p.text)].every((u) => allowed.has(u))).map(
+    (p) => p.text,
+  );
+}
+
+/** Whole passages until the round is long enough, the same share of them featuring the focus as with words. */
+function passageText(pool: readonly string[], focus: string | undefined, random: () => number, length: number): string {
+  const pick = (list: readonly string[]) => list[Math.floor(random() * list.length)];
+  const featurePool = focus ? pool.filter((p) => unitsOf(p).has(focus)) : [];
+  const parts: string[] = [];
+  let keystrokes = 0;
+  let featured = 0;
+  while (keystrokes < length) {
+    const wantFeature = featurePool.length > 0 && featured < FOCUS_SHARE * (parts.length + 1);
+    const passage = pick(wantFeature ? featurePool : pool);
+    if (passage === parts.at(-1) && pool.length > 1) continue;
+    if (featurePool.includes(passage)) featured++;
+    parts.push(passage);
+    keystrokes += toKeystrokes(passage).length + 1;
+  }
+  return parts.join(' ');
 }
 
 /** A repeatable pseudo-random source (mulberry32), so a seed always gives the same text. */

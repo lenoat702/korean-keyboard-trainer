@@ -11,6 +11,7 @@ describe('sampleName', () => {
   });
 
   it('picks the press recording by keyboard row', () => {
+    expect(sampleName('Digit1', 'down')).toBe('generic_r0');
     expect(sampleName('KeyQ', 'down')).toBe('generic_r1');
     expect(sampleName('KeyP', 'down')).toBe('generic_r1');
     expect(sampleName('KeyA', 'down')).toBe('generic_r2');

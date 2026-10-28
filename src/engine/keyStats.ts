@@ -26,9 +26,13 @@ export interface Targets {
 
 export type StatMap = ReadonlyMap<string, UnitStat>;
 
-/** Folds a finished round's first tries into the per-unit stats. Returns only the units that changed. */
-export function recordRound(stats: StatMap, round: Round): UnitStat[] {
-  const units = keystrokeUnits(round.target);
+/**
+ * Folds a finished round's first tries into the per-unit stats. Returns only the units that
+ * changed. Only unlocked units count: every round has word gaps, but they're measured from stage 8.
+ */
+export function recordRound(stats: StatMap, round: Round, unlocked: readonly string[]): UnitStat[] {
+  const counted = new Set(unlocked);
+  const units = keystrokeUnits(round.target).map((list) => list.filter((u) => counted.has(u)));
   const changed = new Map<string, UnitStat>();
   const get = (unit: string) => {
     let s = changed.get(unit);

@@ -60,7 +60,14 @@ describe('fingerForCode', () => {
   });
 
   it('ignores keys the trainer does not draw', () => {
-    expect(fingerForCode('Digit1')).toBeUndefined();
+    expect(fingerForCode('Backquote')).toBeUndefined();
+  });
+
+  it('assigns the number row and punctuation to touch-typing fingers', () => {
+    expect(fingerForCode('Digit1')).toBe('L5');
+    expect(fingerForCode('Digit6')).toBe('R2');
+    expect(fingerForCode('Period')).toBe('R4');
+    expect(fingerForCode('Slash')).toBe('R5');
   });
 });
 

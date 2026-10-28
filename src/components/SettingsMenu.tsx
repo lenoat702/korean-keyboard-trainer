@@ -58,6 +58,16 @@ export function SettingsMenu() {
 
       {open && (
         <div className="settings-panel" id="settings-panel" role="group" aria-label="Settings">
+          <p className="settings-heading">Practice</p>
+          <label className="setting">
+            <input
+              type="checkbox"
+              checked={settings.showMeanings}
+              onChange={(e) => update({ showMeanings: e.target.checked })}
+            />
+            Show word meanings
+          </label>
+
           <p className="settings-heading">Hands</p>
           <label className="setting">
             <input type="checkbox" checked={settings.showHands} onChange={(e) => update({ showHands: e.target.checked })} />

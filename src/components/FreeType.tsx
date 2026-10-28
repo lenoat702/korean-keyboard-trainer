@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from 'react';
-import { ALL_JAMO, fingerName, jamoForKey, keyForCode } from '../hangul/layout';
+import { UNLOCK_ORDER } from '../engine/curriculum';
+import { fingerName, jamoForKey, keyForCode } from '../hangul/layout';
 import { assembleTyped } from '../hangul/text';
 import { skinAt } from '../hands/skin';
 import { useSettings } from '../settings';
@@ -12,7 +13,7 @@ interface Props {
   setTyped: Dispatch<SetStateAction<string[]>>;
 }
 
-const EVERY_KEY = new Set(ALL_JAMO);
+const EVERY_KEY = new Set(UNLOCK_ORDER);
 
 /** Type anything on the 2-set layout and see it built into Hangul. Nothing is scored or saved. */
 export function FreeType({ typed, setTyped }: Props) {
@@ -120,6 +121,7 @@ export function FreeType({ typed, setTyped }: Props) {
         showHands={settings.showHands}
         spaceThumb={keys.spaceThumb}
         skin={skinAt(settings.skin)}
+        extraKeys
       />
 
       {!focused && (

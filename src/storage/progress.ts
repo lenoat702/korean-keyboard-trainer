@@ -1,13 +1,14 @@
 import { earnedBadges, isPersonalBest } from '../engine/badges';
-import { currentStage, STARTING_UNITS } from '../engine/curriculum';
+import { currentStage, FREE_TEXT_STAGE, STARTING_UNITS } from '../engine/curriculum';
 import { generateText, seededRandom } from '../engine/generator';
 import { dayKey } from '../engine/history';
 import { recordRound, summarize, unitToUnlock, type UnitStat } from '../engine/keyStats';
 import { rankIndex, stagesPassed, type RankInput } from '../engine/rank';
 import { stats as roundStats, type Round } from '../engine/round';
+import { cleanText, splitParts, type Cleaned } from '../engine/ownText';
 import { DEFAULT_GOAL_MINUTES, streakInfo, type StreakInfo } from '../engine/streak';
 import { fallingXp, xpFor } from '../engine/xp';
-import type { ProgressRow, SessionMode, SessionRow, SettingsRow, TrainerDB } from './db';
+import type { OwnTextRow, ProgressRow, SessionMode, SessionRow, SettingsRow, TrainerDB } from './db';
 
 export const DEFAULT_SETTINGS: Required<SettingsRow> = {
   id: 'me',
@@ -74,6 +75,11 @@ export function status(state: AppState, now = Date.now()): Status {
   };
 }
 
+/** Stage 9 passed: practice opens up to proverbs, paragraphs and your own text. */
+export function inFreeText(status: Pick<Status, 'stagesPassed'>): boolean {
+  return status.stagesPassed >= FREE_TEXT_STAGE - 1;
+}
+
 // ── Saving ──────────────────────────────────────────────────────────────────
 
 /** What a finished session earned, for the results screen. */
@@ -106,7 +112,7 @@ export async function saveRound(
   if (round.startedAt === null || round.finishedAt === null) throw new Error('Round not finished');
   const s = roundStats(round, round.finishedAt);
 
-  const changed = recordRound(state.stats, round);
+  const changed = recordRound(state.stats, round, state.progress.unlocked);
   const stats = new Map(state.stats);
   for (const c of changed) stats.set(c.unit, c);
 
@@ -214,7 +220,45 @@ export async function dailyText(db: TrainerDB, state: AppState, now = Date.now()
   const day = dayKey(now);
   const saved = await db.daily.get(day);
   if (saved) return saved.text;
-  const text = generateText({ unlocked: state.progress.unlocked, random: seededRandom(day), keystrokes: DAILY_KEYSTROKES });
+  const text = generateText({
+    unlocked: state.progress.unlocked,
+    random: seededRandom(day),
+    keystrokes: DAILY_KEYSTROKES,
+    freeText: inFreeText(status(state, now)),
+  });
   await db.daily.put({ day, text });
   return text;
+}
+
+// ── Your own texts ──────────────────────────────────────────────────────────
+
+/** A saved text with its parts worked out, for the practice screen. */
+export interface OwnText extends OwnTextRow {
+  id: number;
+  parts: string[];
+}
+
+export async function loadOwnTexts(db: TrainerDB): Promise<OwnText[]> {
+  const rows = await db.texts.orderBy('addedAt').reverse().toArray();
+  return rows.map((r) => ({ ...r, id: r.id!, parts: splitParts(r.text) }));
+}
+
+/** Cleans and saves a pasted text. Returns what was kept, and the saved text unless nothing was typable. */
+export async function addOwnText(db: TrainerDB, raw: string, now = Date.now()): Promise<Cleaned & { saved?: OwnText }> {
+  const cleaned = cleanText(raw);
+  if (cleaned.text === '') return cleaned;
+  const row: OwnTextRow = { text: cleaned.text, addedAt: now, part: 0 };
+  const id = (await db.texts.add(row)) as number;
+  return { ...cleaned, saved: { ...row, id, parts: splitParts(cleaned.text) } };
+}
+
+/** Remembers the next part to type; past the last part it starts again from the top. */
+export async function setOwnTextPart(db: TrainerDB, text: OwnText, part: number): Promise<OwnText> {
+  const next = part >= text.parts.length ? 0 : part;
+  await db.texts.update(text.id, { part: next });
+  return { ...text, part: next };
+}
+
+export async function removeOwnText(db: TrainerDB, id: number): Promise<void> {
+  await db.texts.delete(id);
 }

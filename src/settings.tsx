@@ -12,10 +12,18 @@ export interface Settings {
   /** Key sounds on (false = muted). */
   sound: boolean;
   soundProfile: SoundProfile;
+  /** English meanings under practice words and sentences. */
+  showMeanings: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { showHands: true, skin: 0.25, sound: true, soundProfile: DEFAULT_PROFILE };
-const STORAGE_KEY = 'kkt.settings';
+export const DEFAULT_SETTINGS: Settings = {
+  showHands: true,
+  skin: 0.25,
+  sound: true,
+  soundProfile: DEFAULT_PROFILE,
+  showMeanings: true,
+};
+export const STORAGE_KEY = 'kkt.settings';
 
 interface SettingsValue {
   settings: Settings;
@@ -72,5 +80,6 @@ export function parseSettings(v: unknown): Settings {
     sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
     // Unknown values (including the retired 'synth') fall back to the default switch.
     soundProfile: isSoundProfile(o.soundProfile) ? o.soundProfile : DEFAULT_SETTINGS.soundProfile,
+    showMeanings: typeof o.showMeanings === 'boolean' ? o.showMeanings : DEFAULT_SETTINGS.showMeanings,
   };
 }

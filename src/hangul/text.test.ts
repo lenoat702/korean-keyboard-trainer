@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assembleTyped, charRanges, COMPOUND, DOUBLE_FINAL, keystrokeUnits, toKeystrokes } from './text';
+import { assembleTyped, charRanges, COMPOUND, DOUBLE_FINAL, keystrokeUnits, NUMBER, toKeystrokes, WORD_GAP } from './text';
 
 describe('toKeystrokes', () => {
   it('splits syllables in reading order', () => {
@@ -63,8 +63,13 @@ describe('charRanges', () => {
 });
 
 describe('keystrokeUnits', () => {
-  it('credits each press to its jamo and spaces to nothing', () => {
-    expect(keystrokeUnits('나 아')).toEqual([['ㄴ'], ['ㅏ'], [], ['ㅇ'], ['ㅏ']]);
+  it('credits each press to its jamo, and a Space and the key after it to the word gap', () => {
+    expect(keystrokeUnits('나 아')).toEqual([['ㄴ'], ['ㅏ'], [WORD_GAP], ['ㅇ', WORD_GAP], ['ㅏ']]);
+  });
+
+  it('credits punctuation to itself and every digit to NUMBER', () => {
+    expect(keystrokeUnits('3시.')).toEqual([[NUMBER], ['ㅅ'], ['ㅣ'], ['.']]);
+    expect(keystrokeUnits('네, 2')).toEqual([['ㄴ'], ['ㅔ'], [','], [WORD_GAP], [NUMBER, WORD_GAP]]);
   });
 
   it('tags both presses of a compound vowel', () => {
@@ -77,7 +82,7 @@ describe('keystrokeUnits', () => {
   });
 
   it('lines up with toKeystrokes', () => {
-    const text = '괜찮아요 닭 의자';
-    expect(keystrokeUnits(text).map((u) => u[0] ?? ' ')).toEqual(toKeystrokes(text));
+    const text = '괜찮아요 닭 의자 10개?';
+    expect(keystrokeUnits(text)).toHaveLength(toKeystrokes(text).length);
   });
 });

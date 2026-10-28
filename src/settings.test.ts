@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, parseSettings } from './settings';
 
 describe('parseSettings', () => {
   it('keeps valid saved values', () => {
-    const saved = { showHands: false, skin: 0.8, sound: false, soundProfile: 'holypanda' };
+    const saved = { showHands: false, skin: 0.8, sound: false, soundProfile: 'holypanda', showMeanings: false };
     expect(parseSettings(saved)).toEqual(saved);
   });
 
@@ -13,6 +13,8 @@ describe('parseSettings', () => {
       sound: false,
     });
     expect(parseSettings(null)).toEqual(DEFAULT_SETTINGS);
+    // Saved before meanings existed: they're on by default.
+    expect(parseSettings({ showHands: true }).showMeanings).toBe(true);
     expect(parseSettings('junk')).toEqual(DEFAULT_SETTINGS);
   });
 });

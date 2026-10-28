@@ -18,9 +18,10 @@ export interface KeystrokeRow {
 
 /**
  * 'pair' = a "drill this" round from the slowest-pairs list; 'sprint' = the 60-second rank
- * test; 'daily' = the daily challenge; 'falling' = the falling-words game.
+ * test; 'daily' = the daily challenge; 'falling' = the falling-words game; 'own' = a part of
+ * a text you pasted in.
  */
-export type SessionMode = 'adaptive' | 'pair' | 'sprint' | 'daily' | 'falling';
+export type SessionMode = 'adaptive' | 'pair' | 'sprint' | 'daily' | 'falling' | 'own';
 
 export interface SessionRow {
   id?: number;
@@ -70,6 +71,16 @@ export interface DailyRow {
   text: string;
 }
 
+/** A text you pasted in to practise (stage 10), and how far through it you are. */
+export interface OwnTextRow {
+  id?: number;
+  /** Cleaned: only what the trainer can check. */
+  text: string;
+  addedAt: number;
+  /** The next part to type. */
+  part: number;
+}
+
 export class TrainerDB extends Dexie {
   keystrokes!: EntityTable<KeystrokeRow, 'id'>;
   sessions!: EntityTable<SessionRow, 'id'>;
@@ -78,6 +89,7 @@ export class TrainerDB extends Dexie {
   settings!: EntityTable<SettingsRow, 'id'>;
   badges!: EntityTable<BadgeRow, 'id'>;
   daily!: EntityTable<DailyRow, 'day'>;
+  texts!: EntityTable<OwnTextRow, 'id'>;
 
   constructor(name = 'korean-keyboard-trainer') {
     super(name);
@@ -97,6 +109,17 @@ export class TrainerDB extends Dexie {
       settings: 'id',
       badges: 'id',
       daily: 'day',
+    });
+    // Phase 5: texts you paste in to practise.
+    this.version(3).stores({
+      keystrokes: '++id, sessionId, time, expected',
+      sessions: '++id, startedAt, mode',
+      keyStats: 'unit',
+      progress: 'id',
+      settings: 'id',
+      badges: 'id',
+      daily: 'day',
+      texts: '++id, addedAt',
     });
   }
 }

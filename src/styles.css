@@ -1691,3 +1691,160 @@ button:disabled {
   background: var(--accent-soft);
   color: var(--ink);
 }
+
+/* ── Phase 5: stages 8–10, meanings, own text, backup ───────────────────── */
+
+/* A practice word with its English meaning underneath. */
+.target .w {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: top;
+}
+
+.target .gloss {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: 1.3;
+  color: var(--quiet);
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+/* The translation of the sentence you're on. */
+.translation {
+  margin: 4px 0 0;
+  color: var(--quiet);
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* With the number row, the keys get a little smaller so the wider bottom row still fits. */
+@media (min-width: 721px) {
+  .keyboard-wrap:has(.keyboard.extra) {
+    --key: 46px;
+  }
+}
+
+@media (max-width: 720px) {
+  .keyboard-wrap:has(.keyboard.extra) {
+    --key: 24px;
+  }
+}
+
+.keyboard.extra .key.space {
+  margin-left: calc(var(--key) * 2.9);
+}
+
+.key.symbol .latin {
+  display: none;
+}
+
+.heatmap .patterns {
+  flex-wrap: wrap;
+}
+
+.own-texts {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 20px;
+}
+
+.own-texts h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.own-texts.locked h2 {
+  color: var(--quiet);
+}
+
+.own-texts p {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.own-texts textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--hangul);
+  resize: vertical;
+}
+
+.own-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.own-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.own-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.own-preview {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.backup {
+  margin-top: 16px;
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.backup-confirm {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  background: var(--bad-soft);
+}
+
+.backup-confirm p {
+  margin: 0 0 10px;
+}
+
+.backup-confirm button + button {
+  margin-left: 8px;
+}
+
+button.primary.danger {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+
+.backup > p.quiet,
+.backup > p.error {
+  margin: 10px 0 0;
+  font-size: 13px;
+}

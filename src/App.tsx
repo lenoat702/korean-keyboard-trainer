@@ -4,6 +4,7 @@ import { FallingSummary, FallingWords } from './components/FallingWords';
 import { FreeType } from './components/FreeType';
 import { bestOnDay, Games, type GameKind } from './components/Games';
 import { KeyProgress } from './components/KeyProgress';
+import { OwnTexts } from './components/OwnTexts';
 import { Practice } from './components/Practice';
 import { SettingsMenu } from './components/SettingsMenu';
 import { Summary } from './components/Summary';
@@ -13,14 +14,20 @@ import { rankName, sprintScore } from './engine/rank';
 import type { Round } from './engine/round';
 import { TrainerDB, type SessionMode } from './storage/db';
 import {
+  addOwnText,
   dailyText,
+  inFreeText,
+  loadOwnTexts,
   loadState,
+  removeOwnText,
   saveDailyGoal,
   saveGame,
   saveRound,
+  setOwnTextPart,
   status as statusOf,
   type AppState,
   type GameResult,
+  type OwnText,
   type Reward,
 } from './storage/progress';
 
@@ -31,13 +38,19 @@ interface Drill {
   focus?: string;
   /** Set when drilling one slow key pair from the progress screen. */
   pair?: Pair;
+  /** Set when typing a part of your own text: the text as it was when the part started. */
+  own?: OwnText;
 }
 
 function nextDrill(state: AppState, pair?: Pair): Drill {
   const { unlocked } = state.progress;
   if (pair) return { text: generateText({ unlocked, pair }), pair };
   const focus = focusUnit(unlocked, state.stats, state.settings);
-  return { text: generateText({ unlocked, focus }), focus };
+  return { text: generateText({ unlocked, focus, freeText: inFreeText(statusOf(state)) }), focus };
+}
+
+function ownDrill(text: OwnText): Drill {
+  return { text: text.parts[text.part], own: text };
 }
 
 /** Sprint text: more than anyone types in a minute, so it never runs out. */
@@ -86,15 +99,22 @@ export function App() {
   const [roundId, setRoundId] = useState(0);
   // Free-type text lives here so it survives switching screens.
   const [freeTyped, setFreeTyped] = useState<string[]>([]);
+  const [ownTexts, setOwnTexts] = useState<OwnText[]>([]);
 
-  useEffect(() => {
-    loadState(db)
-      .then((s) => {
+  const load = useCallback(() => {
+    Promise.all([loadState(db), loadOwnTexts(db)])
+      .then(([s, texts]) => {
         setState(s);
+        setOwnTexts(texts);
         setDrill(nextDrill(s));
+        setResult(null);
+        setPlay(null);
+        setRoundId((n) => n + 1);
       })
       .catch((e: unknown) => setError(`Couldn't open saved progress: ${String(e)}`));
   }, []);
+
+  useEffect(load, [load]);
 
   const unlockedSet = useMemo(() => new Set(state?.progress.unlocked), [state]);
   const status = useMemo(() => (state ? statusOf(state) : null), [state]);
@@ -124,7 +144,17 @@ export function App() {
   );
 
   const onFinish = useCallback(
-    (round: Round) => drill && saveFinished(round, drill.pair ? 'pair' : 'adaptive', setResult),
+    (round: Round) => {
+      if (!drill) return;
+      saveFinished(round, drill.own ? 'own' : drill.pair ? 'pair' : 'adaptive', setResult);
+      // Move your place in your own text on to the next part (back to the start after the last).
+      const own = drill.own;
+      if (own) {
+        setOwnTextPart(db, own, own.part + 1)
+          .then((next) => setOwnTexts((list) => list.map((t) => (t.id === next.id ? next : t))))
+          .catch((e: unknown) => setError(`Couldn't save your place in the text: ${String(e)}`));
+      }
+    },
     [drill, saveFinished],
   );
 
@@ -135,7 +165,13 @@ export function App() {
   }, []);
 
   // After a pair drill, Next goes back to adaptive practice; Retry repeats the same text.
-  const onNext = useCallback(() => state && startDrill(nextDrill(state)), [state, startDrill]);
+  // In your own text, Next types the following part, and after the last part goes back too.
+  const ownLastPart = drill?.own !== undefined && drill.own.part + 1 >= drill.own.parts.length;
+  const onNext = useCallback(() => {
+    if (!state) return;
+    const own = drill?.own && ownTexts.find((t) => t.id === drill.own!.id);
+    startDrill(own && !ownLastPart ? ownDrill(own) : nextDrill(state));
+  }, [state, drill, ownTexts, ownLastPart, startDrill]);
   const onRetry = useCallback(() => drill && startDrill(drill), [drill, startDrill]);
   const onDrillPair = useCallback(
     (pair: Pair) => {
@@ -146,13 +182,35 @@ export function App() {
     [state, startDrill],
   );
 
+  const onAddOwn = useCallback(
+    async (raw: string) => {
+      const { saved, removed } = await addOwnText(db, raw);
+      if (!saved) return null;
+      setOwnTexts((list) => [saved, ...list]);
+      startDrill(ownDrill(saved));
+      return removed;
+    },
+    [startDrill],
+  );
+
+  const onRemoveOwn = useCallback((id: number) => {
+    removeOwnText(db, id)
+      .then(() => setOwnTexts((list) => list.filter((t) => t.id !== id)))
+      .catch((e: unknown) => setError(`Couldn't remove that text: ${String(e)}`));
+  }, []);
+
   const startGame = useCallback(
     async (kind: GameKind, text?: string) => {
       if (!state) return;
       const id = Date.now();
       if (kind === 'falling') setPlay({ kind, id });
       else if (kind === 'sprint') {
-        setPlay({ kind, id, text: text ?? generateText({ unlocked: state.progress.unlocked, keystrokes: SPRINT_KEYSTROKES }) });
+        const freeText = inFreeText(statusOf(state));
+        setPlay({
+          kind,
+          id,
+          text: text ?? generateText({ unlocked: state.progress.unlocked, keystrokes: SPRINT_KEYSTROKES, freeText }),
+        });
       } else setPlay({ kind, id, text: text ?? (await dailyText(db, state)) });
     },
     [state],
@@ -272,7 +330,14 @@ export function App() {
       ) : !state || !drill || !status ? (
         !error && <p className="loading">Loading your progress…</p>
       ) : view === 'progress' ? (
-        <Dashboard db={db} state={state} status={status} onDrillPair={onDrillPair} onGoalChange={onGoalChange} />
+        <Dashboard
+          db={db}
+          state={state}
+          status={status}
+          onDrillPair={onDrillPair}
+          onGoalChange={onGoalChange}
+          onRestored={load}
+        />
       ) : view === 'games' ? (
         renderGame()
       ) : (
@@ -282,18 +347,35 @@ export function App() {
               Drilling a slow pair: {drill.pair[0]} → {drill.pair[1]}
             </p>
           )}
+          {drill.own && !result && (
+            <p className="drill-banner">
+              Your text · part {drill.own.part + 1} of {drill.own.parts.length}{' '}
+              <button className="link" onClick={() => startDrill(nextDrill(state))}>
+                Back to practice
+              </button>
+            </p>
+          )}
           {result ? (
             <Summary
               round={result.round}
               saving={result.saving}
               unlocked={result.unlocked}
               reward={result.reward}
+              title={drill.own ? `Part ${drill.own.part + 1} of ${drill.own.parts.length} done` : undefined}
+              nextLabel={drill.own ? (ownLastPart ? 'Back to practice' : 'Next part') : undefined}
               onNext={onNext}
               onRetry={onRetry}
             />
           ) : (
             <Practice key={roundId} text={drill.text} unlocked={unlockedSet} focus={drill.focus} onFinish={onFinish} />
           )}
+          <OwnTexts
+            texts={ownTexts}
+            unlocked={inFreeText(status)}
+            onAdd={onAddOwn}
+            onPractise={(t) => startDrill(ownDrill(t))}
+            onRemove={onRemoveOwn}
+          />
           <KeyProgress state={state} focus={drill.focus} />
         </>
       )}

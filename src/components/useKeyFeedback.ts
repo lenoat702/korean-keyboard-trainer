@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { playKey, preloadProfile } from '../audio/keySound';
 import { EXTRA_KEYS, thumbForSpace, type Thumb } from '../hands/geometry';
-import { ROWS } from '../hangul/layout';
+import { ALL_KEYS } from '../hangul/layout';
 import { useSettings } from '../settings';
 
 /** Physical keys whose presses the on-screen hands mirror. */
-const TRACKED = new Set<string>([...ROWS.flat().map((d) => d.code), 'Space', ...EXTRA_KEYS]);
+const TRACKED = new Set<string>([...ALL_KEYS.map((d) => d.code), ...EXTRA_KEYS]);
 /** Keys that click when pressed: everything the hands follow, plus the editing keys. */
 const SOUNDED = new Set<string>([...TRACKED, 'Backspace', 'Enter']);
 /** A quick tap still shows the finger on its key for at least this long. */

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { toKeystrokes } from '../hangul/text';
 import { focusUnit, MIN_SAMPLES, recordRound, summarize, unitToUnlock, WINDOW, type UnitStat } from './keyStats';
+import { UNLOCK_ORDER } from './curriculum';
 import { backspace, createRound, press, type Round } from './round';
 
 const targets = { targetSpeed: 100, accuracyFloor: 95 };
+const ALL = UNLOCK_ORDER;
 
 /** Types the whole text correctly, one press every `stepMs`. */
 function typed(text: string, stepMs: number): Round {
@@ -18,7 +20,7 @@ const stat = (unit: string, n: number, ms: number, correct = true): UnitStat => 
 
 describe('recordRound', () => {
   it('records time and result per unit, skipping the first press (no previous)', () => {
-    const [n, a] = recordRound(new Map(), typed('나', 300));
+    const [n, a] = recordRound(new Map(), typed('나', 300), ALL);
     expect(n).toEqual({ unit: 'ㄴ', times: [], results: [true] });
     expect(a).toEqual({ unit: 'ㅏ', times: [300], results: [true] });
   });
@@ -29,26 +31,33 @@ describe('recordRound', () => {
     r = backspace(r);
     r = press(r, 'ㄴ', 'KeyS', 400);
     r = press(r, 'ㅏ', 'KeyK', 700);
-    const n = recordRound(new Map(), r).find((s) => s.unit === 'ㄴ');
+    const n = recordRound(new Map(), r, ALL).find((s) => s.unit === 'ㄴ');
     expect(n?.results).toEqual([false]);
   });
 
   it('ignores pauses when timing', () => {
-    const [, a] = recordRound(new Map(), typed('나', 5000));
+    const [, a] = recordRound(new Map(), typed('나', 5000), ALL);
     expect(a.times).toEqual([]);
     expect(a.results).toEqual([true]);
   });
 
   it('keeps only the last WINDOW presses', () => {
     const old = new Map([['ㅏ', stat('ㅏ', WINDOW, 900)]]);
-    const a = recordRound(old, typed('나', 300)).find((s) => s.unit === 'ㅏ')!;
+    const a = recordRound(old, typed('나', 300), ALL).find((s) => s.unit === 'ㅏ')!;
     expect(a.times).toHaveLength(WINDOW);
     expect(a.times.at(-1)).toBe(300);
   });
 
   it('credits compound vowel presses to the pattern too', () => {
-    const units = recordRound(new Map(), typed('와', 300)).map((s) => s.unit);
+    const units = recordRound(new Map(), typed('와', 300), ALL).map((s) => s.unit);
     expect(units).toContain('compound');
+  });
+
+  it('measures only unlocked units, so word gaps start counting at stage 8', () => {
+    const early = recordRound(new Map(), typed('나 나', 300), ['ㄴ', 'ㅏ']).map((s) => s.unit);
+    expect(early).toEqual(['ㄴ', 'ㅏ']);
+    const later = recordRound(new Map(), typed('나 나', 300), ALL).find((s) => s.unit === 'word-gap');
+    expect(later?.results).toEqual([true, true]);
   });
 });
 

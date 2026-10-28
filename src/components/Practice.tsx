@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { glossText, sentenceAt, type Gloss } from '../engine/meanings';
 import { backspace, createRound, endRound, isFinished, nextExpected, press, stats, type Round } from '../engine/round';
 import { fingerForCode, thumbForSpace, type Thumb } from '../hands/geometry';
 import { skinAt } from '../hands/skin';
@@ -35,6 +36,7 @@ export function Practice({ text, unlocked, focus, onFinish, timeLimitMs }: Props
   const [clock, setClock] = useState(now);
   const areaRef = useRef<HTMLDivElement>(null);
   const ranges = useMemo(() => charRanges(text), [text]);
+  const glosses = useMemo(() => glossText(text), [text]);
   const { settings } = useSettings();
   const keys = useKeyFeedback();
 
@@ -90,6 +92,8 @@ export function Practice({ text, unlocked, focus, onFinish, timeLimitMs }: Props
   const nextFinger = stroke ? fingerForCode(stroke.key.code, nextThumb) : undefined;
   const live = stats(round, clock);
   const [from, to] = visibleRange(text, ranges, round.typed.length);
+  const currentChar = ranges.findIndex(([, end]) => round.typed.length < end);
+  const sentence = settings.showMeanings && currentChar !== -1 ? sentenceAt(glosses, currentChar) : undefined;
   const secondsLeft =
     timeLimitMs === undefined ? undefined : Math.max(0, Math.ceil((timeLimitMs - live.seconds * 1000) / 1000));
   const lastWrong = round.typed.length > 0 && round.typed.at(-1) !== round.expected[round.typed.length - 1];
@@ -126,12 +130,13 @@ export function Practice({ text, unlocked, focus, onFinish, timeLimitMs }: Props
       </div>
 
       <p className="target" lang="ko">
-        {[...text].slice(from, to).map((ch, k) => (
-          <span key={from + k} className={charState(round, ranges[from + k])}>
-            {ch === ' ' ? ' ' : ch}
-          </span>
-        ))}
+        {renderTarget(text, round, ranges, from, to, settings.showMeanings ? glosses : [])}
       </p>
+      {sentence && (
+        <p className="translation" lang="en">
+          {sentence.meaning}
+        </p>
+      )}
 
       <p className={`input ${lastWrong ? 'wrong' : ''}`} lang="ko">
         {assembleTyped(round.typed.slice(ranges[from]?.[0] ?? 0))}
@@ -158,6 +163,7 @@ export function Practice({ text, unlocked, focus, onFinish, timeLimitMs }: Props
         spaceThumb={keys.spaceThumb}
         nextFinger={nextFinger}
         skin={skinAt(settings.skin)}
+        extraKeys={unlocked.has('.')}
       />
 
       {!focused && (
@@ -182,6 +188,55 @@ function visibleRange(text: string, ranges: Array<[number, number]>, typedCount:
   let from = Math.max(0, current - (current % (WINDOW_CHARS / 2)) - 8);
   while (from > 0 && chars[from - 1] !== ' ') from--;
   return [from, Math.min(length, from + WINDOW_CHARS)];
+}
+
+/**
+ * The visible characters, coloured by state. Words with a meaning are grouped with it underneath.
+ * A break opportunity follows each space, which is non-breaking so its underline shows.
+ */
+function renderTarget(
+  text: string,
+  round: Round,
+  ranges: Array<[number, number]>,
+  from: number,
+  to: number,
+  glosses: readonly Gloss[],
+): ReactNode[] {
+  const chars = [...text];
+  const wordAt = new Map(glosses.filter((g) => g.kind === 'word').map((g) => [g.start, g]));
+  const char = (i: number) =>
+    chars[i] === ' ' ? (
+      <Fragment key={i}>
+        <span className={charState(round, ranges[i])}>{'\xa0'}</span>
+        <wbr />
+      </Fragment>
+    ) : (
+      <span key={i} className={charState(round, ranges[i])}>
+        {chars[i]}
+      </span>
+    );
+
+  const out: ReactNode[] = [];
+  for (let i = from; i < to; ) {
+    const word = wordAt.get(i);
+    if (!word) {
+      out.push(char(i++));
+      continue;
+    }
+    const end = Math.min(word.end, to);
+    const inner: ReactNode[] = [];
+    for (let j = i; j < end; j++) inner.push(char(j));
+    out.push(
+      <span key={`w${i}`} className="w">
+        <span>{inner}</span>
+        <span className="gloss" lang="en">
+          {word.meaning}
+        </span>
+      </span>,
+    );
+    i = end;
+  }
+  return out;
 }
 
 function charState(r: Round, [start, end]: [number, number]): string {

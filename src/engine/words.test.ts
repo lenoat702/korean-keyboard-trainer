@@ -5,11 +5,12 @@ import { STAGES, stageOf, UNLOCK_ORDER } from './curriculum';
 import { WORDS } from './words';
 
 describe('curriculum', () => {
-  it('unlocks every key on the layout exactly once, plus the two patterns', () => {
-    const keys = UNLOCK_ORDER.filter((u) => u.length === 1);
+  it('unlocks every jamo key exactly once, then the patterns, word gaps, punctuation and numbers', () => {
+    const keys = UNLOCK_ORDER.filter((u) => ALL_JAMO.includes(u));
     expect(new Set(keys)).toEqual(new Set(ALL_JAMO));
     expect(keys).toHaveLength(33);
-    expect(UNLOCK_ORDER).toHaveLength(35);
+    expect(UNLOCK_ORDER).toHaveLength(41);
+    expect(new Set(UNLOCK_ORDER).size).toBe(UNLOCK_ORDER.length);
   });
 });
 
@@ -25,11 +26,15 @@ describe('words', () => {
     });
   }
 
-  it('every unit has real words to practise it with', () => {
-    for (const unit of UNLOCK_ORDER) {
+  it('every unit up to stage 7 has real words to practise it with', () => {
+    for (const unit of UNLOCK_ORDER.filter((u) => stageOf(u) <= 7)) {
       const count = WORDS.filter((w) => unitsOf(w.text).has(unit)).length;
       expect(count, `${unit} appears in ${count} words`).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('gives every word a meaning', () => {
+    for (const w of WORDS) expect(w.meaning.trim(), w.text).not.toBe('');
   });
 
   it('has no duplicates', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_JAMO } from '../hangul/layout';
 import { earnedBadges, isPersonalBest, type BadgeSession } from './badges';
-import { STAGES, UNLOCK_ORDER } from './curriculum';
+import { FREE_TEXT_STAGE, stageInProgress, STAGES, UNLOCK_ORDER } from './curriculum';
 import type { UnitStat } from './keyStats';
 import { rankIndex, requirements, RANKS, sprintScore, stagesPassed, type RankInput, type SprintResult } from './rank';
 import { streakInfo } from './streak';
@@ -77,11 +77,13 @@ describe('stagesPassed', () => {
     expect(stagesPassed(UNLOCK_ORDER.slice(0, stage1 + 1), NO_STATS, TARGETS)).toBe(1);
   });
 
-  it('passes the last stage only when its units are at target', () => {
-    const last = STAGES.at(-1)!.units[0];
-    expect(stagesPassed(UNLOCK_ORDER, NO_STATS, TARGETS)).toBe(STAGES.length - 1);
-    const ready = new Map([[last, { unit: last, times: Array(20).fill(300), results: Array(20).fill(true) }]]);
-    expect(stagesPassed(UNLOCK_ORDER, ready, TARGETS)).toBe(STAGES.length);
+  it('passes the last keyed stage only when its units are at target, and never "passes" free text', () => {
+    const sentences = STAGES.find((s) => s.id === 9)!.units;
+    expect(stagesPassed(UNLOCK_ORDER, NO_STATS, TARGETS)).toBe(8);
+    const ready = new Map(sentences.map((u) => [u, { unit: u, times: Array(20).fill(300), results: Array(20).fill(true) }]));
+    expect(stagesPassed(UNLOCK_ORDER, ready, TARGETS)).toBe(9);
+    expect(stageInProgress(UNLOCK_ORDER, 9)).toBe(FREE_TEXT_STAGE);
+    expect(stageInProgress(UNLOCK_ORDER, 8)).toBe(9);
   });
 });
 

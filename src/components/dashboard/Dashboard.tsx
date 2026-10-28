@@ -3,6 +3,7 @@ import type { Pair } from '../../engine/generator';
 import { dailySeries, slowestPairs, startOfDay, type DayPoint, type PairStat } from '../../engine/history';
 import type { TrainerDB } from '../../storage/db';
 import type { AppState, Status } from '../../storage/progress';
+import { BackupSection } from './BackupSection';
 import { KeyHeatmap } from './KeyHeatmap';
 import { PracticeCalendar } from './PracticeCalendar';
 import { RewardsSection } from './RewardsSection';
@@ -18,6 +19,7 @@ interface Props {
   status: Status;
   onDrillPair: (pair: Pair) => void;
   onGoalChange: (minutes: number) => void;
+  onRestored: () => void;
 }
 
 interface Data {
@@ -25,7 +27,7 @@ interface Data {
   pairs: PairStat[];
 }
 
-export function Dashboard({ db, state, status, onDrillPair, onGoalChange }: Props) {
+export function Dashboard({ db, state, status, onDrillPair, onGoalChange, onRestored }: Props) {
   const [range, setRange] = useState<Range>(30);
   const [data, setData] = useState<Data | null>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -129,6 +131,7 @@ export function Dashboard({ db, state, status, onDrillPair, onGoalChange }: Prop
       ))}
 
       <KeyHeatmap state={state} />
+      <BackupSection db={db} onRestored={onRestored} />
     </div>
   );
 }

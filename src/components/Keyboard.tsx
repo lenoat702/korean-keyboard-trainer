@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { HandFinger, Thumb } from '../hands/geometry';
-import { HAND_SPLIT, HOME_BUMPS, isLeftHand, ROWS, SPACE, type KeyDef, type KeyStroke } from '../hangul/layout';
+import { HAND_SPLIT, HOME_BUMPS, isLeftHand, NUMBER_ROW, PUNCTUATION_KEYS, ROWS, SPACE, type KeyDef, type KeyStroke } from '../hangul/layout';
+import { unitOfChar } from '../hangul/text';
 import type { SkinColors } from '../hands/skin';
 import { Hands } from './Hands';
 
@@ -26,12 +27,19 @@ interface Props {
   /** The finger that should press the next key. */
   nextFinger?: HandFinger;
   skin: SkinColors;
+  /** Show the number row and , . / keys (from stage 9, and in free typing). */
+  extraKeys?: boolean;
 }
 
-// Row offsets in key widths, roughly matching a physical keyboard's stagger.
+// Row offsets in key widths, roughly matching a physical keyboard's stagger. With the
+// number row shown, the letter rows move half a key right of it, as on a real keyboard.
 const OFFSETS = [0, 0.3, 0.8];
+const EXTRA_OFFSET = 0.5;
 
-export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceThumb, nextFinger, skin }: Props) {
+/** The units a key types: its characters, with digits counted as NUMBER. */
+const keyUnits = (def: KeyDef) => [def.base, def.shift].filter((c) => c !== undefined).map(unitOfChar);
+
+export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceThumb, nextFinger, skin, extraKeys = false }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const down = new Set(held);
   // Shift is pressed with the hand opposite the key, so it never ties up the finger you need.
@@ -42,8 +50,8 @@ export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceT
       'key',
       `finger-${def.finger}`,
       i === HAND_SPLIT ? 'split' : '',
-      unlocked.has(def.base) || (def.shift !== undefined && unlocked.has(def.shift)) || def === SPACE ? '' : 'locked',
-      focus !== undefined && (def.base === focus || def.shift === focus) ? 'focus' : '',
+      keyUnits(def).some((u) => unlocked.has(u)) || def === SPACE ? '' : 'locked',
+      focus !== undefined && keyUnits(def).includes(focus) ? 'focus' : '',
       next?.key.code === def.code ? 'next' : '',
       flash?.code === def.code ? (flash.ok ? 'flash-ok' : 'flash-bad') : '',
       down.has(def.code) ? 'down' : '',
@@ -60,18 +68,19 @@ export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceT
 
   return (
     <div className="keyboard-wrap" ref={wrapRef}>
-      <div className="keyboard" aria-hidden="true">
+      <div className={`keyboard ${extraKeys ? 'extra' : ''}`} aria-hidden="true">
+        {extraKeys && (
+          <div className="kb-row number-row">{NUMBER_ROW.map((def, i) => renderKey(def, keyClass(def, i) + ' symbol', flash))}</div>
+        )}
         {ROWS.map((row, r) => (
-          <div className="kb-row" key={r} style={{ paddingLeft: `calc(${OFFSETS[r]} * var(--key))` }}>
+          <div
+            className="kb-row"
+            key={r}
+            style={{ paddingLeft: `calc(${OFFSETS[r] + (extraKeys ? EXTRA_OFFSET : 0)} * var(--key))` }}
+          >
             {r === 2 && shiftKey('ShiftLeft', 'left')}
-            {row.map((def, i) => (
-              <div data-code={def.code} className={keyClass(def, i)} key={def.code + (flash?.code === def.code ? flash.id : '')}>
-                <span className="latin">{def.latin}</span>
-                {def.shift && <span className="shifted">{def.shift}</span>}
-                <span className="jamo">{def.base}</span>
-                {HOME_BUMPS.has(def.code) && <span className="bump" />}
-              </div>
-            ))}
+            {row.map((def, i) => renderKey(def, keyClass(def, i), flash))}
+            {r === 2 && extraKeys && PUNCTUATION_KEYS.map((def) => renderKey(def, keyClass(def, -1) + ' symbol', flash))}
             {/* ; types nothing in 2-set drills, but it's where the right pinky rests. */}
             {r === 1 && (
               <div data-code="Semicolon" className={`key aux finger-R5 ${down.has('Semicolon') ? 'down' : ''}`}>
@@ -92,6 +101,17 @@ export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceT
         </div>
       </div>
       {showHands && <Hands containerRef={wrapRef} held={held} spaceThumb={spaceThumb} nextFinger={nextFinger} skin={skin} />}
+    </div>
+  );
+}
+
+function renderKey(def: KeyDef, className: string, flash: Flash | null) {
+  return (
+    <div data-code={def.code} className={className} key={def.code + (flash?.code === def.code ? flash.id : '')}>
+      <span className="latin">{def.latin}</span>
+      {def.shift && <span className="shifted">{def.shift}</span>}
+      <span className="jamo">{def.base}</span>
+      {HOME_BUMPS.has(def.code) && <span className="bump" />}
     </div>
   );
 }

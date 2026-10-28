@@ -1,6 +1,9 @@
 import type { SessionMode } from '../storage/db';
 import { STAGES } from './curriculum';
 
+/** Stages with a 'cleared' badge: from stage 2 up to the last one with keys to pass. */
+const KEYED_STAGES = STAGES.slice(1).filter((s) => s.units.length > 0);
+
 // Badges are worked out from saved history each time, so they can never get out of step with
 // it. Storage only remembers when each was first earned.
 
@@ -16,7 +19,7 @@ export const FLAWLESS_MIN_KEYSTROKES = 20;
 export const BADGES: readonly Badge[] = [
   { id: 'first-syllable', name: '첫 글자 First syllable', description: 'Finish your first round' },
   { id: 'home-row', name: 'Home row', description: 'Pass stage 1, the home row' },
-  ...STAGES.slice(1).map((s) => ({ id: `stage-${s.id}`, name: `Stage ${s.id} cleared`, description: `Pass stage ${s.id}: ${s.name.toLowerCase()}` })),
+  ...KEYED_STAGES.map((s) => ({ id: `stage-${s.id}`, name: `Stage ${s.id} cleared`, description: `Pass stage ${s.id}: ${s.name.toLowerCase()}` })),
   { id: 'streak-7', name: '7-day streak', description: 'Meet your daily goal 7 days running' },
   { id: 'streak-30', name: '30-day streak', description: 'Meet your daily goal 30 days running' },
   { id: 'flawless', name: 'Flawless', description: `Finish a round of ${FLAWLESS_MIN_KEYSTROKES}+ keystrokes with no mistakes` },
@@ -49,7 +52,7 @@ export function earnedBadges({ sessions, stagesPassed, bestStreak }: BadgeContex
   const rounds = sessions.filter((s) => s.mode !== 'falling');
   if (rounds.length > 0) earned.add('first-syllable');
   if (stagesPassed >= 1) earned.add('home-row');
-  for (const s of STAGES.slice(1)) if (stagesPassed >= s.id) earned.add(`stage-${s.id}`);
+  for (const s of KEYED_STAGES) if (stagesPassed >= s.id) earned.add(`stage-${s.id}`);
   if (bestStreak >= 7) earned.add('streak-7');
   if (bestStreak >= 30) earned.add('streak-30');
   if (rounds.some((s) => s.accuracy === 100 && (s.correct ?? 0) >= FLAWLESS_MIN_KEYSTROKES)) earned.add('flawless');

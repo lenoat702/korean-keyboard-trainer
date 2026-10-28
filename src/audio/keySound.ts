@@ -85,7 +85,7 @@ function context(resume = true): AudioContext | null {
 }
 
 // File names in public/sounds/<profile>/press and /release.
-const ROW_FILES = ['generic_r1', 'generic_r2', 'generic_r3'];
+const ROW_FILES = ['generic_r0', 'generic_r1', 'generic_r2', 'generic_r3'];
 const BIG_FILES = ['space', 'enter', 'backspace'];
 
 interface SampleSet {
@@ -138,6 +138,7 @@ export function sampleName(code: string, action: KeyAction, bigKeys = true): str
   const special = bigKeys ? { Space: 'space', Enter: 'enter', Backspace: 'backspace' }[code] : undefined;
   if (special) return special;
   if (action === 'up') return 'generic';
+  if (/^Digit\d$/.test(code)) return 'generic_r0';
   if (/^Key[QWERTYUIOP]$/.test(code)) return 'generic_r1';
   if (/^Key[ASDFGHJKL]$/.test(code) || code === 'Semicolon') return 'generic_r2';
   return 'generic_r3'; // bottom row, Shift, and the big keys of switches without their own

@@ -1,5 +1,6 @@
-import { currentStage, nextLocked, STAGES, unitLabel } from '../engine/curriculum';
+import { nextLocked, stageInProgress, STAGES, unitLabel } from '../engine/curriculum';
 import { MIN_SAMPLES, summarize } from '../engine/keyStats';
+import { stagesPassed } from '../engine/rank';
 import type { AppState } from '../storage/progress';
 
 interface Props {
@@ -10,7 +11,8 @@ interface Props {
 /** Each unlocked unit against the targets, and what unlocks next. */
 export function KeyProgress({ state, focus }: Props) {
   const { progress, stats, settings } = state;
-  const stage = STAGES.find((s) => s.id === currentStage(progress.unlocked))!;
+  const passed = stagesPassed(progress.unlocked, stats, settings);
+  const stage = STAGES.find((s) => s.id === stageInProgress(progress.unlocked, passed))!;
   const next = nextLocked(progress.unlocked);
   const readyCount = progress.unlocked.filter((u) => summarize(stats.get(u), settings).ready).length;
 

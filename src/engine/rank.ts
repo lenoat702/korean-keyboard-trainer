@@ -44,15 +44,16 @@ export interface RankInput {
 
 /**
  * The highest stage passed. A stage is passed once the next stage's first unit unlocks (the
- * unlock rule only allows that when every unit so far is at target); the last stage, once
- * all its units are at target.
+ * unlock rule only allows that when every unit so far is at target); the last keyed stage,
+ * once all its units are at target. Free text, with no keys of its own, is never "passed".
  */
 export function stagesPassed(unlocked: readonly string[], stats: StatMap, targets: Targets): number {
   const have = new Set(unlocked);
   let passed = 0;
   for (const [i, stage] of STAGES.entries()) {
+    if (stage.units.length === 0) break;
     const next = STAGES[i + 1];
-    const done = next
+    const done = next?.units.length
       ? have.has(next.units[0])
       : stage.units.every((u) => have.has(u) && summarize(stats.get(u), targets).ready);
     if (!done) break;
