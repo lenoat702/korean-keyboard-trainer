@@ -18,6 +18,10 @@ It runs in the browser, needs no account, and keeps your progress on your own ma
 - **Key sounds.** Nine recorded mechanical switches, or silence.
 - **Free type.** A scratchpad for typing anything, with live Hangul assembly.
 
+## Try it online
+
+The trainer runs in your browser at **https://korean-keyboard-trainer.pages.dev**, with nothing to install.
+
 ## Getting started
 
 You need [Node.js](https://nodejs.org/) 20 or newer.
