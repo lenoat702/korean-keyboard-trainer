@@ -20,7 +20,7 @@ It runs in the browser, needs no account, and keeps your progress on your own ma
 
 ## Try it online
 
-The trainer runs in your browser at **https://korean-keyboard-trainer.pages.dev**, with nothing to install.
+The trainer runs in your browser at **https://korean-keyboard-trainer.lenoat702.workers.dev**, with nothing to install.
 
 ## Getting started
 
