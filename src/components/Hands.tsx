@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import {
   FINGERS,
   handPose,
@@ -33,6 +33,10 @@ export function Hands({ containerRef, held, spaceThumb, nextFinger, skin }: Prop
   const layout = useKeyLayout(containerRef);
   const target = useMemo(() => (layout ? targetTips(layout, held, spaceThumb) : null), [layout, held, spaceThumb]);
   const glided = useGlide(target?.tips ?? null, layout);
+  // SVG ids unique to this mount. Safari doesn't re-resolve url(#id) references when an
+  // element is replaced by a new one with the same id, so reusing fixed ids each round
+  // left the masked hands invisible. useId's colons aren't valid in url(#…), so drop them.
+  const uid = useId().replace(/[^\w-]/g, '');
 
   if (!layout || !target || !glided) return null;
   const { k } = layout;
@@ -44,28 +48,28 @@ export function Hands({ containerRef, held, spaceThumb, nextFinger, skin }: Prop
     <svg className="hands" aria-hidden="true" style={style}>
       <defs>
         {poses.map((p) => (
-          <linearGradient key={p.hand} id={`hand-fade-${p.hand}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={p.fadeFrom} y2={p.fadeTo}>
+          <linearGradient key={p.hand} id={`${uid}-fade-${p.hand}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={p.fadeFrom} y2={p.fadeTo}>
             <stop offset="0" stopColor="#fff" />
             <stop offset="1" stopColor="#000" />
           </linearGradient>
         ))}
         {poses.map((p) => (
-          <mask key={p.hand} id={`hand-mask-${p.hand}`} maskUnits="userSpaceOnUse" x="-10000" y="-10000" width="20000" height="20000">
-            <rect x="-10000" y="-10000" width="20000" height="20000" fill={`url(#hand-fade-${p.hand})`} />
+          <mask key={p.hand} id={`${uid}-mask-${p.hand}`} maskUnits="userSpaceOnUse" x="-10000" y="-10000" width="20000" height="20000">
+            <rect x="-10000" y="-10000" width="20000" height="20000" fill={`url(#${uid}-fade-${p.hand})`} />
           </mask>
         ))}
         {/* A soft highlight in the middle of the back of the hand gives it some volume. */}
-        <radialGradient id="hand-palm" cx="0.5" cy="0.35" r="0.6">
+        <radialGradient id={`${uid}-palm`} cx="0.5" cy="0.35" r="0.6">
           <stop offset="0" stopColor="var(--nail)" stopOpacity="0.55" />
           <stop offset="1" stopColor="var(--skin)" stopOpacity="0" />
         </radialGradient>
       </defs>
 
       {poses.map((p) => (
-        <g key={p.hand} mask={`url(#hand-mask-${p.hand})`}>
+        <g key={p.hand} mask={`url(#${uid}-mask-${p.hand})`}>
           {/* Drawn opaque, then faded as one group, so overlaps don't show as darker seams. */}
           <g className="hand-shape">
-            <HandSilhouette pose={p} k={k} />
+            <HandSilhouette pose={p} k={k} palmFill={`url(#${uid}-palm)`} />
           </g>
         </g>
       ))}
@@ -99,7 +103,7 @@ function dropTips(tips: Record<HandFinger, Point>, dy: number): Record<HandFinge
  * filled on top. The fills cover the outlines wherever parts overlap, so only the
  * hand's outer edge stays outlined.
  */
-function HandSilhouette({ pose, k }: { pose: HandPose; k: number }) {
+function HandSilhouette({ pose, k, palmFill }: { pose: HandPose; k: number; palmFill: string }) {
   const parts = [...pose.fingers, pose.thumb];
   const palm = smoothPath(pose.palm);
   const palmWidth = 0.35 * k;
@@ -113,7 +117,7 @@ function HandSilhouette({ pose, k }: { pose: HandPose; k: number }) {
       </g>
       <g className="hand-fill">
         <path d={palm} strokeWidth={palmWidth} />
-        <path d={palm} fill="url(#hand-palm)" stroke="none" />
+        <path d={palm} fill={palmFill} stroke="none" />
         {parts.map((f) => (
           <path key={f.finger} d={fingerPath(f)} />
         ))}
