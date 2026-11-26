@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useState } from 'react';
 import type { HandFinger, Thumb } from '../hands/geometry';
 import { HAND_SPLIT, HOME_BUMPS, isLeftHand, NUMBER_ROW, PUNCTUATION_KEYS, ROWS, SPACE, type KeyDef, type KeyStroke } from '../hangul/layout';
 import { unitOfChar } from '../hangul/text';
@@ -40,7 +40,8 @@ const EXTRA_OFFSET = 0.5;
 const keyUnits = (def: KeyDef) => [def.base, def.shift].filter((c) => c !== undefined).map(unitOfChar);
 
 export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceThumb, nextFinger, skin, extraKeys = false }: Props) {
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // The element itself, held in state (not a ref) so Hands re-renders and measures once it exists.
+  const [wrap, setWrap] = useState<HTMLDivElement | null>(null);
   const down = new Set(held);
   // Shift is pressed with the hand opposite the key, so it never ties up the finger you need.
   const shiftSide = next?.shift ? (isLeftHand(next.key.finger) ? 'right' : 'left') : null;
@@ -67,7 +68,7 @@ export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceT
   );
 
   return (
-    <div className="keyboard-wrap" ref={wrapRef}>
+    <div className="keyboard-wrap" ref={setWrap}>
       <div className={`keyboard ${extraKeys ? 'extra' : ''}`} aria-hidden="true">
         {extraKeys && (
           <div className="kb-row number-row">{NUMBER_ROW.map((def, i) => renderKey(def, keyClass(def, i) + ' symbol', flash))}</div>
@@ -100,7 +101,7 @@ export function Keyboard({ next, flash, unlocked, focus, held, showHands, spaceT
           </div>
         </div>
       </div>
-      {showHands && <Hands containerRef={wrapRef} held={held} spaceThumb={spaceThumb} nextFinger={nextFinger} skin={skin} />}
+      {showHands && <Hands container={wrap} held={held} spaceThumb={spaceThumb} nextFinger={nextFinger} skin={skin} />}
     </div>
   );
 }
