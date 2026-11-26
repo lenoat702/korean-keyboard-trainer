@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   FINGERS,
   handPose,
@@ -14,7 +14,7 @@ import type { SkinColors } from '../hands/skin';
 
 interface Props {
   /** The element holding the keyboard keys, each marked with data-code. */
-  containerRef: RefObject<HTMLElement | null>;
+  container: HTMLElement | null;
   /** Physical keys held down, oldest first. */
   held: readonly string[];
   spaceThumb: Thumb;
@@ -29,13 +29,12 @@ const GLIDE_MS = 40;
 const TIP_DROP = 0.24;
 
 /** Two translucent hands over the on-screen keyboard that mirror the keys you press. */
-export function Hands({ containerRef, held, spaceThumb, nextFinger, skin }: Props) {
-  const layout = useKeyLayout(containerRef);
+export function Hands({ container, held, spaceThumb, nextFinger, skin }: Props) {
+  const layout = useKeyLayout(container);
   const target = useMemo(() => (layout ? targetTips(layout, held, spaceThumb) : null), [layout, held, spaceThumb]);
   const glided = useGlide(target?.tips ?? null, layout);
-  // SVG ids unique to this mount. Safari doesn't re-resolve url(#id) references when an
-  // element is replaced by a new one with the same id, so reusing fixed ids each round
-  // left the masked hands invisible. useId's colons aren't valid in url(#…), so drop them.
+  // SVG ids unique to this mount, so two sets of hands never share mask or gradient ids.
+  // useId's colons aren't valid in url(#…), so drop them.
   const uid = useId().replace(/[^\w-]/g, '');
 
   if (!layout || !target || !glided) return null;
@@ -203,11 +202,15 @@ function smoothPath(pts: readonly Point[]): string {
 }
 
 /** Measures every key's centre inside the container, again whenever it resizes. */
-function useKeyLayout(containerRef: RefObject<HTMLElement | null>): KeyLayout | null {
+/**
+ * Measures the keys inside `el`. It takes the element, not a ref: a parent's ref isn't
+ * attached yet when this child's layout effect first runs, so a ref read here would be
+ * null and never measured again. (StrictMode re-runs effects in dev, which hid that.)
+ */
+function useKeyLayout(el: HTMLElement | null): KeyLayout | null {
   const [layout, setLayout] = useState<KeyLayout | null>(null);
 
   useLayoutEffect(() => {
-    const el = containerRef.current;
     if (!el) return;
     const measure = () => {
       const box = el.getBoundingClientRect();
@@ -230,7 +233,7 @@ function useKeyLayout(containerRef: RefObject<HTMLElement | null>): KeyLayout | 
     // Web fonts can shift key sizes slightly after first paint.
     document.fonts?.ready.then(measure).catch(() => {});
     return () => ro.disconnect();
-  }, [containerRef]);
+  }, [el]);
 
   return layout;
 }
